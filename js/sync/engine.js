@@ -12,6 +12,8 @@
 import * as db from '../db.js';
 import { isConfigured, getSession, apiFetch, onAuthChange, SyncError } from './auth.js';
 import { reconcileQuickProject } from '../data/projects.js';
+import { syncFiles } from './files.js';
+import { refreshUrls } from '../data/photos.js';
 
 const PUSH_BATCH = 200;
 const PULL_PAGE = 1000;
@@ -193,6 +195,12 @@ async function runOnce() {
     }
     // A quick project switch writes a setting: send it straight away.
     if ((await db.countDirty()) > 0 && !again) await push();
+    // Photo bytes after the records (quiet: storage hiccups never fail the sync).
+    const files = await syncFiles(userId);
+    if (files.length) {
+      refreshUrls(files);
+      window.dispatchEvent(new CustomEvent('ld:files-changed', { detail: { ids: files } }));
+    }
     failures = 0;
     const now = new Date().toISOString();
     saveLocal({ last_ok: now });

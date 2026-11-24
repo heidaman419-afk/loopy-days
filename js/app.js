@@ -6,10 +6,14 @@ import { openDB, askPersistentStorage } from './db.js';
 import * as home from './screens/home.js';
 import * as counter from './screens/counter.js';
 import * as settings from './screens/settings.js';
+import * as projects from './screens/projects.js';
+import * as project from './screens/project.js';
+import * as projectForm from './screens/project-form.js';
 import { placeholder } from './screens/placeholder.js';
 import { startSync } from './sync/engine.js';
 import { catchRecoveryLink } from './sync/auth.js';
 import { toast } from './ui/overlay.js';
+import { startNowBar } from './ui/now-bar.js';
 
 const TABS = [
   ['home', 'Home', icons.home],
@@ -22,11 +26,14 @@ const TABS = [
 const routes = {
   home,
   stash: placeholder('stash'),
-  projects: placeholder('projects'),
+  projects,
   patterns: placeholder('patterns'),
   activity: placeholder('activity'),
   counter,
   settings,
+  project,                                                                    // #/project/<id>
+  'project-new': projectForm,                                                 // #/project-new[/<draftId>]
+  'project-edit': { fullscreen: true, mount: projectForm.editMount },         // #/project-edit/<id>
 };
 
 function buildTabBar() {
@@ -71,6 +78,7 @@ async function boot() {
   askPersistentStorage();
   // Online sync: does nothing until config.js is filled in and someone signs in.
   try { startSync(); } catch (e) { console.error(e); }
+  try { startNowBar(); } catch (e) { console.error(e); }
 }
 
 boot();

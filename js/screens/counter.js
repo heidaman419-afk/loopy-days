@@ -6,7 +6,7 @@ import { waveHeader, backButton } from '../ui/header.js';
 import { icons } from '../ui/icons.js';
 import { esc, el, onTap, fmtDuration, fmtLong, timeAgo } from '../ui/dom.js';
 import { openDialog, confirmDialog, promptDialog, toast } from '../ui/overlay.js';
-import { ensureQuickProject, getProject, QUICK_KEY } from '../data/projects.js';
+import { ensureQuickProject, getProject, QUICK_KEY, markWorked } from '../data/projects.js';
 import { ProjectCounters } from '../data/counters.js';
 import { SessionTimer, loadTimerSettings } from '../data/timer.js';
 import { openTimerSettings } from './timer-settings.js';
@@ -18,6 +18,9 @@ export const fullscreen = true;
 export async function mount(root, params) {
   const project = params[0] ? await getProject(params[0]) : await ensureQuickProject();
   if (!project) { location.hash = '#/home'; return; }
+  if (project.draft) { location.hash = `#/project-new/${project.id}`; return; }
+  // Back goes to the project page for real projects, Home for the Quick counter.
+  const backTo = project.kind === 'quick' ? '#/home' : `#/project/${project.id}`;
 
   const [model, settings] = await Promise.all([
     ProjectCounters.load(project.id),
@@ -44,7 +47,7 @@ export async function mount(root, params) {
     })}
     <main class="counter-page">
       <h1 class="page-title">Row counter</h1>
-      <p class="page-sub">${esc(project.name)}</p>
+      <p class="page-sub" data-sub>${esc(project.name)}</p>
 
       <section class="count-card" aria-label="Main counter">
         <button type="button" class="count-card__label" data-act="rename" aria-label="Rename counter">
@@ -162,6 +165,11 @@ export async function mount(root, params) {
   function paintLastTap() {
     const at = main().last_tapped_at;
     q('[data-last]').textContent = at ? `Last tapped ${timeAgo(at)}` : 'Tap +1 to start counting';
+  }
+
+  function paintSub() {
+    const el2 = q('[data-sub]');
+    if (el2) el2.textContent = project.name || 'Untitled project';
   }
 
   function paintLabel() {
@@ -290,7 +298,9 @@ export async function mount(root, params) {
     const s = timer.noteTap(r.applied);             // 2. memory
     let goalHit = false;
     if (c.target && r.before < c.target && r.after >= c.target) { c.goal_reached_at = db.nowISO(); goalHit = true; }
-    save(s ? [...r.entries, ['sessions', s]] : r.entries); // 3. disk
+    const entries = s ? [...r.entries, ['sessions', s]] : r.entries;
+    if (r.applied > 0 && markWorked(project)) { entries.push(['projects', project]); paintSub(); }
+    save(entries);                                  // 3. disk
     // 4. everything else
     if (r.events.length > 1) paintOtherValues();
     paintGoal(); paintLastTap(); paintUndo(); paintTimer();
@@ -330,7 +340,9 @@ export async function mount(root, params) {
     lastTouch = Date.now();
     const s = timer.toggle();
     paintTimer();
-    save([['sessions', s]]);
+    const entries = [['sessions', s]];
+    if (timer.running && markWorked(project)) entries.push(['projects', project]);
+    save(entries);
   });
 
   othersRow.addEventListener('pointerdown', (e) => {
@@ -377,7 +389,7 @@ export async function mount(root, params) {
 
   /* ---------------- other actions ---------------- */
 
-  act('back').addEventListener('click', () => { location.hash = '#/home'; });
+  act('back').addEventListener('click', () => { location.hash = backTo; });
 
   act('settings').addEventListener('click', () => openTimerSettings(settings, () => { paintTimer(); }));
 
@@ -431,7 +443,7 @@ export async function mount(root, params) {
     if (timer.s) entries.push(['sessions', timer.end('deleted')]);
     await db.putMany(entries).catch(console.error);
     toast('Counter deleted');
-    location.hash = '#/home';
+    location.hash = backTo;
   });
 
   act('lock').addEventListener('click', () => {
@@ -574,9 +586,12 @@ export async function mount(root, params) {
       }
     }
     const started = lastTouch;
-    const [fresh, freshSettings] = await Promise.all([ProjectCounters.load(project.id), loadTimerSettings()]);
+    const [fresh, freshSettings, freshProject] = await Promise.all([
+      ProjectCounters.load(project.id), loadTimerSettings(), db.get('projects', project.id)]);
     const t2 = await SessionTimer.load(project.id, freshSettings);
     if (lastTouch !== started || busy()) { scheduleReload(800); return; } // tapped meanwhile: try later
+    if (freshProject && freshProject.deleted) { location.hash = '#/projects'; return; }
+    if (freshProject) { Object.assign(project, freshProject); paintSub(); } // never write a stale copy back
     model.main = fresh.main;
     model.extras = fresh.extras;
     model.notes = fresh.notes;

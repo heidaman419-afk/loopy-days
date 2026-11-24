@@ -22,6 +22,29 @@ export function saveTimerSettings(s) {
   return db.setSetting('timer', { ...s });
 }
 
+/**
+ * One session as it stands right now, applying the auto-pause and 4-hour rules even
+ * when no counter screen is open to apply them. -> { ms, state: 'running'|'paused'|'ended' }
+ */
+export function sessionNow(s, settings = TIMER_DEFAULTS, now = Date.now()) {
+  if (!s) return { ms: 0, state: 'ended' };
+  if (s.status === 'ended') return { ms: s.active_ms || 0, state: 'ended' };
+  if (s.status !== 'running') return { ms: s.active_ms || 0, state: 'paused' };
+  let end = now;
+  let state = 'running';
+  const quiet = now - (s.last_activity || s.seg_start);
+  const idle = (settings.idle_min || 30) * 60000;
+  if (quiet >= LONG_PAUSE_MS) { end = s.last_activity; state = 'paused'; }
+  else if (settings.mode === 'auto_pause' && quiet >= idle) { end = s.last_activity + idle; state = 'paused'; }
+  return { ms: (s.active_ms || 0) + Math.max(0, end - s.seg_start), state };
+}
+
+/** Total time worked on a project (all its sessions, the open one counted live). */
+export async function timeWorked(projectId, settings, now = Date.now()) {
+  const sessions = await db.byIndex('sessions', 'project_id', projectId);
+  return sessions.reduce((t, s) => t + sessionNow(s, settings, now).ms, 0);
+}
+
 function newSession(projectId, now) {
   return {
     id: db.newId(),

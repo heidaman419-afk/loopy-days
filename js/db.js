@@ -10,7 +10,19 @@
 
 const DB_NAME = 'loopy-days';
 
-export const STORES = ['projects', 'counters', 'counter_events', 'row_notes', 'sessions', 'settings'];
+export const STORES = ['projects', 'counters', 'counter_events', 'row_notes', 'sessions', 'settings', 'photos'];
+
+// Stores that stay on this device only: never pushed, never pulled, not counted as
+// "waiting to sync". 'files' holds photo bytes (they travel through Supabase Storage).
+export const LOCAL_STORES = ['files'];
+
+function makeStore(db, name, indexes = []) {
+  const s = db.createObjectStore(name, { keyPath: 'id' });
+  s.createIndex('dirty', 'dirty');
+  s.createIndex('updated_at', 'updated_at');
+  for (const [idx, path] of indexes) s.createIndex(idx, path);
+  return s;
+}
 
 // Each migration runs once, in order, inside onupgradeneeded.
 // To change the schema later, append a function; never edit an old one.
@@ -33,6 +45,12 @@ const MIGRATIONS = [
     make('row_notes', [['counter_id', 'counter_id']]);
     make('sessions', [['project_id', 'project_id'], ['started_at', 'started_at']]);
     make('settings', [['key', 'key']]);
+  },
+  // v2 (feature 3): photo metadata (synced) and photo bytes (this device only)
+  (db) => {
+    makeStore(db, 'photos', [['project_id', 'project_id']]);
+    const f = db.createObjectStore('files', { keyPath: 'id' });
+    f.createIndex('project_id', 'project_id');
   },
 ];
 
@@ -171,12 +189,24 @@ export async function remove(store, id) {
 }
 export const markDeleted = remove;
 
+/**
+ * Write a record exactly as given: no stamping, no dirty flag, no 'ld:local-write' event.
+ * For device-only bookkeeping (the 'files' store).
+ */
+export async function putQuiet(store, rec) {
+  const db = await openDB();
+  const tx = db.transaction(store, 'readwrite');
+  tx.objectStore(store).put(rec);
+  await done(tx);
+  return rec;
+}
+
 /* ---------- Sync helpers (used by js/sync/) ---------- */
 
-/** Stores that exist in this database (includes stores added by later migrations). */
+/** Synced stores in this database (includes stores added by later migrations, never LOCAL_STORES). */
 export async function storeNames() {
   const db = await openDB();
-  return [...db.objectStoreNames];
+  return [...db.objectStoreNames].filter((n) => !LOCAL_STORES.includes(n));
 }
 
 export async function dirtyRecords(store) {
@@ -187,7 +217,7 @@ export async function dirtyRecords(store) {
 /** How many records are waiting to be sent, across all stores. */
 export async function countDirty() {
   const db = await openDB();
-  const names = [...db.objectStoreNames];
+  const names = [...db.objectStoreNames].filter((x) => !LOCAL_STORES.includes(x));
   const tx = db.transaction(names);
   let n = 0;
   for (const s of names) tx.objectStore(s).index('dirty').count(1).onsuccess = (e) => { n += e.target.result; };
@@ -238,7 +268,7 @@ export async function markClean(store, ids) {
  */
 export async function applyRemote(rows) {
   const db = await openDB();
-  const known = new Set(db.objectStoreNames);
+  const known = new Set([...db.objectStoreNames].filter((n) => !LOCAL_STORES.includes(n)));
   const usable = rows.filter((r) => known.has(r.store));
   if (!usable.length) return { stores: [], applied: 0 };
   const names = [...new Set(usable.map((r) => r.store))];
