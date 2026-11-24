@@ -7,6 +7,17 @@ import * as db from '../db.js';
 const HISTORY_GROUPS = 50;   // how many actions Undo can walk back
 const HISTORY_EVENTS = 300;  // events read on open to rebuild that history
 
+/** Most recently tapped first, then most recently changed, then id (stable everywhere). */
+export function byUse(a, b) {
+  const ta = a.last_tapped_at || '';
+  const tb = b.last_tapped_at || '';
+  if (ta !== tb) return ta < tb ? 1 : -1;
+  const ua = Date.parse(a.updated_at) || 0;
+  const ub = Date.parse(b.updated_at) || 0;
+  if (ua !== ub) return ub - ua;
+  return a.id < b.id ? 1 : -1;
+}
+
 export function newCounter(projectId, fields = {}) {
   return {
     id: db.newId(),
@@ -28,7 +39,9 @@ export function newCounter(projectId, fields = {}) {
 export class ProjectCounters {
   static async load(projectId) {
     const all = await db.byIndex('counters', 'project_id', projectId);
-    let main = all.find((c) => c.is_main);
+    // After a sync two devices may each have made a main counter: the one that was
+    // actually used wins (same choice on every device).
+    let main = all.filter((c) => c.is_main).sort(byUse)[0];
     if (!main) {
       main = newCounter(projectId, { is_main: true, name: 'Rows' });
       await db.put('counters', main);

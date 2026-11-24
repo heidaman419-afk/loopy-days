@@ -1,11 +1,14 @@
-// Loopy Days - app start-up: tab bar, router, offline support.
+// Loopy Days - app start-up: tab bar, router, offline support, sync.
 
 import { startRouter } from './router.js';
 import { icons } from './ui/icons.js';
 import { openDB, askPersistentStorage } from './db.js';
 import * as home from './screens/home.js';
 import * as counter from './screens/counter.js';
+import * as settings from './screens/settings.js';
 import { placeholder } from './screens/placeholder.js';
+import { startSync } from './sync/engine.js';
+import { catchRecoveryLink } from './sync/auth.js';
 import { toast } from './ui/overlay.js';
 
 const TABS = [
@@ -23,6 +26,7 @@ const routes = {
   patterns: placeholder('patterns'),
   activity: placeholder('activity'),
   counter,
+  settings,
 };
 
 function buildTabBar() {
@@ -55,6 +59,7 @@ function startOffline() {
 }
 
 async function boot() {
+  catchRecoveryLink(); // opened from a password-reset email? go to Settings first
   startOffline();
   const setActiveTab = buildTabBar();
   try { await openDB(); } catch (e) {
@@ -64,6 +69,8 @@ async function boot() {
   }
   startRouter({ outlet: document.getElementById('outlet'), routes, fallback: 'home', onChange: setActiveTab });
   askPersistentStorage();
+  // Online sync: does nothing until config.js is filled in and someone signs in.
+  try { startSync(); } catch (e) { console.error(e); }
 }
 
 boot();

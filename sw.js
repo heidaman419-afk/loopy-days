@@ -1,7 +1,7 @@
 // Loopy Days service worker: caches every app file so the app opens with no signal.
 // Bump VERSION whenever any file changes; the old cache is removed on activate.
 
-const VERSION = 'loopy-days-v4';
+const VERSION = 'loopy-days-v6'; // keep equal to APP_VERSION in js/version.js
 
 const FILES = [
   './',
@@ -11,6 +11,7 @@ const FILES = [
   './css/base.css',
   './css/shell.css',
   './css/counter.css',
+  './css/settings.css',
   './fonts/Nunito.woff2',
   './fonts/Fredoka.woff2',
   './icons/icon.svg',
@@ -21,6 +22,11 @@ const FILES = [
   './js/app.js',
   './js/db.js',
   './js/router.js',
+  './js/version.js',
+  './js/sync/config.js',
+  './js/sync/auth.js',
+  './js/sync/engine.js',
+  './js/ui/sync-badge.js',
   './js/data/projects.js',
   './js/data/counters.js',
   './js/data/timer.js',
@@ -34,6 +40,7 @@ const FILES = [
   './js/screens/counter-sheets.js',
   './js/screens/lock.js',
   './js/screens/timer-settings.js',
+  './js/screens/settings.js',
 ];
 
 self.addEventListener('install', (event) => {

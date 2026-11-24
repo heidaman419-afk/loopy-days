@@ -47,8 +47,10 @@ export class SessionTimer {
     const open = rows.filter((s) => s.status !== 'ended')
       .sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
     const t = new SessionTimer(projectId, settings, open[0] || null);
-    // Close any stray older open sessions (should not happen, but keeps data tidy).
-    t.strays = open.slice(1);
+    // Older open sessions can exist (e.g. one from another device after a sync).
+    // Only tidy up ones that have been quiet for 4 h+, so a live session elsewhere is left alone.
+    const now = Date.now();
+    t.strays = open.slice(1).filter((s) => now - (s.paused_at || s.last_activity || 0) >= LONG_PAUSE_MS);
     return t;
   }
 

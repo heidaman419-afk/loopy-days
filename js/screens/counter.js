@@ -6,7 +6,7 @@ import { waveHeader, backButton } from '../ui/header.js';
 import { icons } from '../ui/icons.js';
 import { esc, el, onTap, fmtDuration, fmtLong, timeAgo } from '../ui/dom.js';
 import { openDialog, confirmDialog, promptDialog, toast } from '../ui/overlay.js';
-import { ensureQuickProject, getProject } from '../data/projects.js';
+import { ensureQuickProject, getProject, QUICK_KEY } from '../data/projects.js';
 import { ProjectCounters } from '../data/counters.js';
 import { SessionTimer, loadTimerSettings } from '../data/timer.js';
 import { openTimerSettings } from './timer-settings.js';
@@ -24,6 +24,8 @@ export async function mount(root, params) {
     loadTimerSettings(),
   ]);
   const timer = await SessionTimer.load(project.id, settings);
+  let inFlight = 0;   // saves not finished yet
+  let lastTouch = 0;  // when the knitter last changed a count here
   if (timer.strays.length) {
     save(timer.strays.map((s) => { s.status = 'ended'; s.ended_at = s.ended_at || new Date(s.paused_at || s.seg_start).toISOString(); s.end_reason = 'stray'; return ['sessions', s]; }));
   }
@@ -95,10 +97,11 @@ export async function mount(root, params) {
 
   function save(entries) {
     if (!entries || !entries.length) return;
+    inFlight++;
     db.putMany(entries).catch((e) => {
       console.error(e);
       toast('Couldn’t save that change. Is your phone’s storage full?');
-    });
+    }).finally(() => { inFlight--; });
   }
 
   /* ---------------- painting ---------------- */
@@ -279,6 +282,7 @@ export async function mount(root, params) {
   /* ---------------- counting ---------------- */
 
   function changeMain(delta) {
+    lastTouch = Date.now();
     const c = main();
     const r = model.bump(c, delta);
     if (!r) { numEl.classList.remove('is-bump'); void numEl.offsetWidth; numEl.classList.add('is-bump'); return; }
@@ -297,6 +301,7 @@ export async function mount(root, params) {
   }
 
   function changeExtra(c, delta) {
+    lastTouch = Date.now();
     const r = model.bump(c, delta);
     if (!r) return;
     const v = othersRow.querySelector(`[data-id="${c.id}"] [data-val]`);
@@ -308,6 +313,7 @@ export async function mount(root, params) {
   }
 
   function undo() {
+    lastTouch = Date.now();
     const u = model.undo();
     if (!u) return;
     paintNumber();
@@ -321,6 +327,7 @@ export async function mount(root, params) {
   onTap(act('plus5'), () => changeMain(+main().big_step || 5));
   onTap(act('undo'), undo);
   onTap(act('timer'), () => {
+    lastTouch = Date.now();
     const s = timer.toggle();
     paintTimer();
     save([['sessions', s]]);
@@ -541,6 +548,51 @@ export async function mount(root, params) {
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pagehide', onPageHide);
 
+  /* ---------------- data from another device (sync) ---------------- */
+  // Never swap numbers under the knitter's thumb: wait until 2 s after the last tap,
+  // until every save has landed and no sheet or dialog is open, then re-read and repaint.
+
+  let reloadTimer = null;
+  function scheduleReload(ms = 300) {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(tryReload, ms);
+  }
+  function busy() {
+    return Date.now() - lastTouch < 2000 || inFlight > 0 || !!document.querySelector('#overlay-root .scrim');
+  }
+  function tryReload() {
+    if (busy()) { scheduleReload(Math.max(500, 2000 - (Date.now() - lastTouch))); return; }
+    reloadFromDb().catch((e) => console.error(e));
+  }
+  async function reloadFromDb() {
+    if (!params[0]) {
+      const quickId = await db.getSetting(QUICK_KEY);
+      if (quickId && quickId !== project.id) {
+        // The Quick counter now lives in another project (chosen during sync): reopen.
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+        return;
+      }
+    }
+    const started = lastTouch;
+    const [fresh, freshSettings] = await Promise.all([ProjectCounters.load(project.id), loadTimerSettings()]);
+    const t2 = await SessionTimer.load(project.id, freshSettings);
+    if (lastTouch !== started || busy()) { scheduleReload(800); return; } // tapped meanwhile: try later
+    model.main = fresh.main;
+    model.extras = fresh.extras;
+    model.notes = fresh.notes;
+    model.history = fresh.history;
+    Object.assign(settings, freshSettings);
+    timer.s = t2.s;
+    renderOthers();
+    paintAll();
+  }
+  const SYNCED = ['projects', 'counters', 'counter_events', 'row_notes', 'sessions', 'settings'];
+  const onDataChanged = (e) => {
+    const stores = (e.detail && e.detail.stores) || SYNCED;
+    if (stores.some((s) => SYNCED.includes(s))) scheduleReload();
+  };
+  window.addEventListener('ld:data-changed', onDataChanged);
+
   /* ---------------- go ---------------- */
 
   renderOthers();
@@ -553,6 +605,8 @@ export async function mount(root, params) {
 
   return () => {
     clearInterval(interval);
+    clearTimeout(reloadTimer);
+    window.removeEventListener('ld:data-changed', onDataChanged);
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('pagehide', onPageHide);
     const s = timer.onLeave();
