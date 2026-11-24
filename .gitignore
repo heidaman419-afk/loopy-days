@@ -1,0 +1,15 @@
+# Never commit captures, patterns or reference material
+*.pdf
+*.PDF
+*.MP4
+*.mp4
+*.mov
+OriginalAppCapturs/
+reference/
+design-reference/
+IMG_*.PNG
+IMG_*.png
+.DS_Store
+node_modules/
+_preview.png
+_frame.html

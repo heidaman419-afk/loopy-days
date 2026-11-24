@@ -1,0 +1,114 @@
+/* Loopy Days design tokens - taken from the brand guide only. */
+
+@font-face {
+  font-family: "Nunito";
+  src: url("../fonts/Nunito.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fredoka";
+  src: url("../fonts/Fredoka.woff2") format("woff2");
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Core palette */
+  --powder-pink: #DFC4CA;
+  --cloud-cream: #F5F3F0;
+  --white: #FFFFFF;
+  --dark-cocoa: #403833;
+  --powder-blue: #B9CBD8;
+  --light-chocolate: #D2B8A9;
+  --mushroom-beige: #C6B6A7;
+  --vanilla-butter: #E8DCC0;
+
+  /* Complementary palette */
+  --muted-butter: #DED0AD;
+  --dusty-honey: #D6BB91;
+  --cloud-blue: #D2DDE3;
+  --vintage-blue: #A6B9C6;
+  --dusty-blue: #7B8E9E;
+  --lilac-milk: #E0D7E5;
+  --dusty-lavender: #C7BBD3;
+  --pistachio-milk: #DCE1D0;
+  --muted-sage: #C1CBB5;
+  --dried-eucalyptus: #A8B5A2;
+  --dusty-apricot: #DEC1AC;
+  --oat-milk: #EBDDD0;
+  --soft-biscuit: #D9CBB9;
+  --milk-chocolate: #947568;
+  --rosewood: #A17879;
+  --mushroom-taupe: #95877D;
+
+  /* Roles (light) */
+  --bg: var(--cloud-cream);
+  --surface: var(--white);
+  --surface-soft: color-mix(in srgb, var(--oat-milk) 50%, var(--cloud-cream));
+  --text: var(--dark-cocoa);
+  --text-soft: color-mix(in srgb, var(--dark-cocoa) 78%, var(--cloud-cream));
+  --text-faint: #95877D;            /* mushroom taupe */
+  --outline: var(--dark-cocoa);
+  --line: rgba(64, 56, 51, 0.14);
+  --header: var(--powder-pink);
+  --header-text: var(--dark-cocoa);
+  --btn-pink: var(--powder-pink);
+  --btn-butter: var(--vanilla-butter);
+  --btn-text: var(--dark-cocoa);
+  --progress: var(--powder-blue);
+  --progress-track: var(--white);
+  --accent: var(--rosewood);
+  --ok: var(--dried-eucalyptus);
+  --overlay: rgba(48, 41, 37, 0.42);
+  --shadow: 0 6px 20px rgba(64, 56, 51, 0.10);
+  --shadow-strong: 0 14px 40px rgba(48, 41, 37, 0.22);
+
+  /* Type */
+  --font-ui: "Nunito", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Fredoka", "Nunito", -apple-system, sans-serif;
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-heading: 28px;
+  --fs-section: 22px;
+
+  /* Shape */
+  --radius-s: 12px;
+  --radius: 18px;
+  --radius-l: 26px;
+  --border: 1.5px solid var(--outline);
+
+  /* Safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --tabbar-h: 64px;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #302925;
+    --surface: #403833;
+    --surface-soft: color-mix(in srgb, #403833 55%, #302925);
+    --text: #F5F3F0;
+    --text-soft: var(--soft-biscuit);
+    --text-faint: var(--mushroom-beige);
+    --outline: #F5F3F0;
+    --line: rgba(245, 243, 240, 0.16);
+    --header: var(--powder-pink);
+    --header-text: var(--dark-cocoa);
+    --btn-text: var(--dark-cocoa);
+    --progress-track: #302925;
+    --accent: var(--powder-pink);
+    --overlay: rgba(20, 16, 14, 0.6);
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    --shadow-strong: 0 14px 40px rgba(0, 0, 0, 0.45);
+  }
+}
