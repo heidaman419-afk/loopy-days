@@ -22,7 +22,7 @@ body.is-fullscreen .screen { padding-bottom: 0; }
 .wave-head__brand { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .wave-head__name { font-family: var(--font-display); font-weight: 500; font-size: 22px; letter-spacing: .1px; }
 .wave-head__wave { display: block; width: 100%; height: 30px; fill: var(--header); margin-top: -1px; }
-.yarn-mark { display: block; }
+.yarn-mark { display: block; border-radius: 28%; }
 
 /* ---------- Pages ---------- */
 

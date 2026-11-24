@@ -116,7 +116,7 @@ export async function mount(root, params) {
     const v = main().value;
     numEl.textContent = v;
     numEl.classList.toggle('is-long', v >= 1000);
-    if (lock) lock.setNumber(v);
+    if (lock) paintLock();
   }
 
   function paintGoal() {

@@ -37,20 +37,6 @@ export const icons = {
   counter: svg('<rect x="4" y="4.8" width="16" height="14.6" rx="3"/><path d="M9.2 9.4v5.2M7.8 10.4l1.4-1M13 9.6c.4-.5 1-.8 1.6-.8 1 0 1.6.7 1.6 1.5 0 1.4-3.2 2.4-3.2 4.3h3.4"/>'),
 };
 
-// Brand mark: yarn ball with two needles (own drawing).
-export const yarnMark = (size = 40) => `
-<svg class="yarn-mark" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
-  <g stroke="#403833" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M34 34 52.5 8.2" />
-    <path d="M38.5 37.2 58 12.8" />
-    <circle cx="53.4" cy="7" r="3.4" fill="#DFC4CA"/>
-    <circle cx="58.8" cy="11.6" r="3.4" fill="#DFC4CA"/>
-    <circle cx="27" cy="37" r="18" fill="#F5F3F0"/>
-    <path d="M12.4 27.2c7.6 1.4 14.6 7.6 17.6 18.8" fill="none"/>
-    <path d="M10 36.6c7.4-1 14.6 2.4 18.6 13.8" fill="none"/>
-    <path d="M18.6 21.2c5.6 3.6 10.6 10.2 11.6 21.4" fill="none"/>
-    <path d="M28.4 19.2c4.6 4.6 8.4 11.6 8 22" fill="none"/>
-    <path d="M38.4 25c1.6 5 1.4 10.6-.6 16.6" fill="none"/>
-    <path d="M40 48.8c3.6 4.4 8.6 6.6 14 5.4 3.6-.8 4.4-3.8 1.8-4.6" fill="none"/>
-  </g>
-</svg>`;
+// Brand mark: the user's own Loopy Days logo.
+export const yarnMark = (size = 40) =>
+  `<img class="yarn-mark" src="./icons/logo-160.png" width="${size}" height="${size}" alt="" aria-hidden="true">`;

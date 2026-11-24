@@ -45,6 +45,13 @@ export function openLock({ onPlus, onExit }) {
     f.classList.remove('is-on'); void f.offsetWidth; f.classList.add('is-on');
   });
   node.addEventListener('contextmenu', (e) => e.preventDefault());
+  // iPhone Safari zooms on fast double taps and pinches; stop that while locked.
+  // (Pointer events above still fire, so every tap still counts.)
+  const noZoom = (e) => { if (!e.target.closest('[data-unlock]')) e.preventDefault(); };
+  node.addEventListener('touchend', noZoom, { passive: false });
+  node.addEventListener('dblclick', (e) => e.preventDefault());
+  const noGesture = (e) => e.preventDefault();
+  ['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, noGesture, { passive: false }));
   // Keyboard: Space/Enter adds one too.
   const onKey = (e) => {
     if ((e.key === ' ' || e.key === 'Enter') && document.activeElement !== unlockBtn) { e.preventDefault(); onPlus(); }
@@ -120,6 +127,7 @@ export function openLock({ onPlus, onExit }) {
       cancelHold();
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVis);
+      ['gesturestart', 'gesturechange'].forEach((t) => document.removeEventListener(t, noGesture));
       if (wake) { wake.release().catch(() => {}); wake = null; }
       document.body.classList.remove('is-locked');
       node.remove();

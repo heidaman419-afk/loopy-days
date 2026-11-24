@@ -1,7 +1,7 @@
 // Loopy Days service worker: caches every app file so the app opens with no signal.
 // Bump VERSION whenever any file changes; the old cache is removed on activate.
 
-const VERSION = 'loopy-days-v2';
+const VERSION = 'loopy-days-v4';
 
 const FILES = [
   './',
@@ -17,6 +17,7 @@ const FILES = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  './icons/logo-160.png',
   './js/app.js',
   './js/db.js',
   './js/router.js',

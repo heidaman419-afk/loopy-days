@@ -6,6 +6,7 @@ import { openDB, askPersistentStorage } from './db.js';
 import * as home from './screens/home.js';
 import * as counter from './screens/counter.js';
 import { placeholder } from './screens/placeholder.js';
+import { toast } from './ui/overlay.js';
 
 const TABS = [
   ['home', 'Home', icons.home],
@@ -37,7 +38,24 @@ function buildTabBar() {
   };
 }
 
+// Start saving the offline copy straight away, before anything else loads.
+// The first time it finishes on this device, say so, so you know it's safe to go offline.
+function startOffline() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  const firstTime = !navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('./sw.js', { scope: './' })
+    .catch((e) => console.warn('Offline support unavailable', e));
+  if (firstTime) {
+    navigator.serviceWorker.ready.then(() => {
+      if (localStorage.getItem('ld-offline-ready')) return;
+      localStorage.setItem('ld-offline-ready', '1');
+      toast('Ready to use offline', { ms: 4000 });
+    });
+  }
+}
+
 async function boot() {
+  startOffline();
   const setActiveTab = buildTabBar();
   try { await openDB(); } catch (e) {
     console.error(e);
@@ -46,11 +64,6 @@ async function boot() {
   }
   startRouter({ outlet: document.getElementById('outlet'), routes, fallback: 'home', onChange: setActiveTab });
   askPersistentStorage();
-
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .catch((e) => console.warn('Offline support unavailable', e));
-  }
 }
 
 boot();
