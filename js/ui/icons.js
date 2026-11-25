@@ -61,6 +61,26 @@ export const icons = {
   pattern: svg('<path d="M6.4 3.8h8.2l3.4 3.4v12c0 .6-.4 1-1 1H6.4c-.6 0-1-.4-1-1V4.8c0-.6.4-1 1-1z"/><path d="M14.4 4v3.4h3.4M8.6 11.6h6.8M8.6 15h4.4"/>'),
   stats: svg('<path d="M6 19.4v-5.2M10 19.4V9M14 19.4v-7.6M18 19.4V5.4"/>', { sw: 2.2 }),
   yarn: svg('<circle cx="11.4" cy="12.4" r="7.2"/><path d="M5.4 9c3 .4 6 2.8 7 7.4M4.4 13.8c3-.6 6 .8 7.6 5.4M8.4 5.8c2.2 1.8 3.8 4.8 4 8.8M13.6 5.4c1.8 2.2 2.6 5.2 2 8.6"/><path d="M17.4 17.4c1.2 1.4 2.4 1.8 3.4 1.2"/>'),
+  // Patterns
+  file: svg('<path d="M6.4 3.8h8.2l3.4 3.4v12c0 .6-.4 1-1 1H6.4c-.6 0-1-.4-1-1V4.8c0-.6.4-1 1-1z"/><path d="M14.4 4v3.4h3.4"/><path d="M8.4 13.4h1.4c.8 0 1.4-.5 1.4-1.3s-.6-1.3-1.4-1.3H8.4v5"/>'),
+  download: svg('<path d="M12 4v11M7.6 10.8 12 15.2l4.4-4.4"/><path d="M5 18.6h14"/>'),
+  expand: svg('<path d="M4.6 9.4V4.6h4.8M19.4 9.4V4.6h-4.8M4.6 14.6v4.8h4.8M19.4 14.6v4.8h-4.8"/>'),
+  copy: svg('<rect x="8.4" y="8.4" width="11.2" height="11.2" rx="2.2"/><path d="M15.4 8.2V6.2c0-1-.8-1.8-1.8-1.8H6.2c-1 0-1.8.8-1.8 1.8v7.4c0 1 .8 1.8 1.8 1.8h2"/>'),
+  redo: svg('<path d="M14.8 5.3 19.6 10l-4.8 4.6"/><path d="M19.2 10h-8.7c-3.4 0-6.1 2.6-6.1 5.9 0 1.2.3 2.2.9 3.2"/>'),
+  up: svg('<path d="M6.6 14.4 12 9l5.4 5.4"/>', { sw: 2 }),
+  down: svg('<path d="M6.6 9.6 12 15l5.4-5.4"/>', { sw: 2 }),
+  more: svg('<circle cx="5.6" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.4" cy="12" r="1.3" fill="currentColor"/>'),
+  list: svg('<path d="M9 6.6h10.6M9 12h10.6M9 17.4h10.6"/><circle cx="4.8" cy="6.6" r=".9" fill="currentColor"/><circle cx="4.8" cy="12" r=".9" fill="currentColor"/><circle cx="4.8" cy="17.4" r=".9" fill="currentColor"/>'),
+  repeat: svg('<path d="M5 11.2V9.6c0-1.6 1.3-2.8 2.8-2.8h11.4M16.4 4l2.8 2.8-2.8 2.8"/><path d="M19 12.8v1.6c0 1.6-1.3 2.8-2.8 2.8H4.8M7.6 20 4.8 17.2 7.6 14.4"/>'),
+  ruler: svg('<path d="M3.6 15.6 15.6 3.6l4.8 4.8-12 12z"/><path d="M7.2 12l1.8 1.8M9.6 9.6l1.2 1.2M12 7.2l1.8 1.8M14.4 4.8l1.2 1.2"/>'),
+  // Category icons (own drawings)
+  cat_top: svg('<path d="M8.6 4.2 4.4 6.6 2.8 12l2.8 1 .8-2.4v9.2h11.2v-9.2l.8 2.4 2.8-1-1.6-5.4-4.2-2.4"/><path d="M8.6 4.2c.6 1.2 1.9 2 3.4 2s2.8-.8 3.4-2"/>', { sw: 1.6 }),
+  cat_shawl: svg('<path d="M3.4 6.4h17.2L12 19.6z"/><path d="M7.4 6.6 12 13.6l4.6-7"/>', { sw: 1.6 }),
+  cat_hat: svg('<path d="M5 16.2c0-5 3.2-9 7-9s7 4 7 9"/><rect x="3.8" y="16" width="16.4" height="3.6" rx="1.4"/><circle cx="12" cy="5" r="1.8"/>', { sw: 1.6 }),
+  cat_socks: svg('<path d="M9 3.6h6.4v8.6c0 1 .4 1.8 1.2 2.4l1.4 1c1.6 1.2 1 3.8-1 3.8h-4.2c-1.2 0-2.2-.5-3-1.4l-1.6-1.8c-.8-1-1.2-2-1.2-3.2z"/><path d="M9 7h6.4"/>', { sw: 1.6 }),
+  cat_blanket: svg('<rect x="3.8" y="4.6" width="16.4" height="14.8" rx="2"/><path d="M3.8 9.6h16.4M3.8 14.4h16.4M9.2 4.6v14.8M14.8 4.6v14.8"/>', { sw: 1.4 }),
+  cat_toy: svg('<circle cx="12" cy="13.4" r="6.2"/><circle cx="6.6" cy="7" r="2.4"/><circle cx="17.4" cy="7" r="2.4"/><circle cx="10" cy="12.4" r=".6" fill="currentColor"/><circle cx="14" cy="12.4" r=".6" fill="currentColor"/><path d="M10.6 15.6c.8.6 2 .6 2.8 0"/>', { sw: 1.6 }),
+  cat_other: svg('<circle cx="11.4" cy="12.4" r="7.2"/><path d="M5.4 9c3 .4 6 2.8 7 7.4M8.4 5.8c2.2 1.8 3.8 4.8 4 8.8"/>', { sw: 1.6 }),
   heart: svg('<path d="M12 19.6s-7.4-4.4-7.4-9.6a4 4 0 0 1 7.4-2.2A4 4 0 0 1 19.4 10c0 5.2-7.4 9.6-7.4 9.6z"/>'),
 };
 

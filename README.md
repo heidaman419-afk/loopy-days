@@ -3,8 +3,9 @@
 A private iPhone home-screen web app (PWA) for knitters. This version holds
 **feature 1, the row counter**, **feature 2, sign-in and offline-first sync with
 Supabase**, **feature 3, projects** (list, tour, drafts, project page, per-project counters,
-photos, Home "continue" card and now-knitting bar), plus the app shell that later features
-slot into.
+photos, Home "continue" card and now-knitting bar), **feature 6, patterns** (add a PDF pattern,
+read it on the device, build a step-by-step guide, follow it while knitting, view the PDF),
+plus the app shell that later features slot into.
 
 Plain HTML, CSS and JavaScript ES modules. No framework, no npm, no build step, no CDN.
 
@@ -50,7 +51,7 @@ copies keep the old, empty config.
 | `js/sync/config.js` | Supabase URL and publishable key (empty = local only) |
 | `js/sync/auth.js` | Email + password sign-in, sign-up, password reset, token refresh, sign-out (fetch only) |
 | `js/sync/engine.js` | Push / pull with `ld_records`, triggers, back-off, status in plain words |
-| `js/sync/files.js` | Photo bytes to and from Supabase Storage (upload, thumbnail download, delete) |
+| `js/sync/files.js` | Photo, pattern PDF and cover bytes to and from Supabase Storage (upload, download, delete), offline space |
 | `supabase/setup.sql` | The server table, trigger and security rules (run once in Supabase) |
 | `supabase/storage.sql` | The private `ld-files` photo bucket and its rules (run once in Supabase) |
 | `js/db.js` | Tiny IndexedDB wrapper: stamping, soft delete, dirty flag, settings, device-only stores |
@@ -64,7 +65,18 @@ copies keep the old, empty config.
 | `js/screens/tour.js` | First-time Projects tour |
 | `js/screens/project.js` | Project page |
 | `js/screens/project-form.js` | New / edit project form (keeps drafts) |
-| `js/screens/placeholder.js` | "Arriving soon" pages for Stash, Patterns, Activity |
+| `js/screens/placeholder.js` | "Arriving soon" pages for Stash and Activity |
+| `css/patterns.css` | Pattern library, form, pattern page, guide setup/editor, follow guide, PDF viewer |
+| `js/data/patterns.js` | Patterns, categories, PDF/cover files, guides per size, guide progress, keep-offline |
+| `js/patterns/*.js` | pdf.js wrapper, PDF reading (lines, sizes, details, guide builder), cursor maths, shared UI, "start a project" |
+| `js/screens/patterns.js` | Patterns tab |
+| `js/screens/pattern-form.js` | Add / edit a pattern, "Fill in from a PDF", "Pattern added" |
+| `js/screens/pattern.js` | Pattern page |
+| `js/screens/guide-setup.js` | Pick your size, make a guide (from the PDF, copy, fresh) |
+| `js/screens/guide-editor.js` | Guide editor |
+| `js/screens/guide-follow.js` | Follow a guide while knitting |
+| `js/screens/pdf-viewer.js` | PDF viewer |
+| `vendor/pdfjs/` | Mozilla pdf.js 6.5.438 (unmodified, Apache 2.0) |
 | `js/screens/counter.js` | The row counter screen |
 | `js/screens/counter-sheets.js` | Goal dialog, row notes sheet, extra counter sheet |
 | `js/screens/lock.js` | Lock mode (whole screen = +1, hold to unlock, wake lock) |
@@ -84,20 +96,30 @@ Every record has `id` (`crypto.randomUUID()`), `created_at`, `updated_at` (ISO s
 
 | Store | Fields |
 | --- | --- |
-| `projects` | `name`, `kind` (`quick` / `project`), `craft` (`knitting` / `crochet` / `other`), `status` (`not_started` / `in_progress` / `on_hold` / `finished` / `frogged`; unknown old values read as not started), `start_date` / `finished_date` (local `YYYY-MM-DD`), `cover_photo_id`, `pattern_id` (null until feature 6), `notes`, `last_worked_at`, `sort`, `draft` (+ `draft_target` while a draft) |
+| `projects` | `name`, `kind` (`quick` / `project`), `craft` (`knitting` / `crochet` / `other`), `status` (`not_started` / `in_progress` / `on_hold` / `finished` / `frogged`; unknown old values read as not started), `start_date` / `finished_date` (local `YYYY-MM-DD`), `cover_photo_id`, `pattern_id`, `size_id` (the pattern size being made; a stable size id, not its name), `notes`, `last_worked_at`, `sort`, `draft` (+ `draft_target` while a draft) |
 | `counters` | `project_id`, `name`, `value`, `target`, `is_main`, `step`, `big_step`, `reset_with_main`, `sort`, `last_tapped_at`, `goal_reached_at` |
 | `counter_events` | `project_id`, `counter_id`, `delta`, `value_after`, `kind` (`tap` / `reset` / `auto-reset`), `group_id` (one user action), `at`, `undone` |
 | `row_notes` | `project_id`, `counter_id`, `row`, `text`, `done` |
 | `sessions` | `project_id`, `started_at`, `ended_at`, `active_ms`, `paused_ms`, `rows`, `status` (`running` / `paused` / `ended`), live fields `seg_start`, `paused_at`, `last_activity`, `pause_reason`, `break_base_ms`, `end_reason` |
 | `settings` | `key`, `value` (e.g. `quick_project_id`, `timer`, `projects_tour_seen`) |
 | `photos` | `project_id`, `mime`, `width`, `height`, `taken_at`, `sort` (metadata only; synced like the rest) |
-| `files` | **This device only, never in `ld_records`.** Same `id` as the photo: `project_id`, `kind` (`photo`), `mime`, `width`, `height`, `blob` (full, longest side 1600 px, JPEG 0.8), `thumb` (400 px), `uploaded`, `thumb_uploaded`, `storage_path`, `remote_gone`, timestamps, `deleted`, `dirty` |
+| `patterns` | `name`, `designer`, `craft`, `category`, `difficulty`, `description`, `sizes` [{`id`, `name`, `pos`}] (`pos` = order in the PDF, used to pick numbers from "a (b) c"), `measurements`, `gauge`, `needles`, `yarns` [{`name`, `brand`, `weight`, `grams` per size, `grams_text`, `length_min/max`, `length_unit`, `skeins_text`, `fibre`, `notes`}], `tools`, `glossary` [{`abbr`, `meaning`}], `notes` (read-first sections), `source_groups` (the instruction lines read from the PDF, used to build guides for any size), `pdf_file_id`, `pdf_name`, `pdf_size`, `pdf_pages`, `pdf_version`, `cover_file_id`, `cover_version`, `from_pdf` |
+| `guides` | One per pattern + size (id derived from both, so two devices never make two): `pattern_id`, `size_id`, `status` (`draft` / `ready`), `tree` (pieces > sections > blocks), `total_rows` |
+| `guide_progress` | One per project (id derived from the project): `project_id`, `guide_id`, `cursor` {`block_id`, `rep`, `row`, `cast`, `done`}, `block_ms` (time per step), `completed_at` |
+| `files` | **This device only, never in `ld_records`.** Photos: same `id` as the photo, `project_id`, `kind` `photo`, `blob` (full, longest side 1600 px, JPEG 0.8), `thumb` (400 px), `uploaded`, `thumb_uploaded`. Patterns: `kind` `pdf` / `cover`, `pattern_id`, `blob`, `version`. All: `mime`, `storage_path`, `remote_gone`, timestamps, `deleted`, `dirty` |
 
 **Goal / target rows** live on the project's main counter (`counters.target`), one place only.
+With a guide, the goal is the guide's row total and the counter shows rows done overall.
 **Progress** = main counter value / target when there is a target; Finished = 100 %; otherwise 0 %.
 **Coming later:** `project_yarn` (project_id, yarn_id, amount) and `project_tools`
-(project_id, tool_id) stores for Stash (feature 5); `pattern_id` on projects for Patterns (feature 6).
-Add them as new stores in a new migration; they sync automatically.
+(project_id, tool_id) stores for Stash (feature 5). Add them as new stores in a new
+migration; they sync automatically.
+
+**Guide blocks** (`tree.pieces[].sections[].blocks[]`): every block has `id` (kept when editing,
+so a project's place survives edits), `kind`, `title`, `note`, `check` (stitch count after it)
+and `page` (PDF page). Kinds: `cast_on` (`stitches`, `method`), `rows` (`rows` [{`n`, `side`
+RS/WS, `text`, `same_as`, `check`}]), `repeat` (`times` + `rows`), `text`, `bind_off`,
+`pick_up` (`stitches`), `chart` (image).
 
 Settings rows are read by `key`; if two devices each made a row for the same key, the
 newest one counts (`db.getSetting`), and `db.setSetting` writes to that row.
@@ -163,6 +185,47 @@ deleted photos (`DELETE ...`), and fetch missing thumbnails
 time they're opened, then kept. Storage problems (bucket not made yet, a photo the other
 device hasn't uploaded yet) are quiet, never stop the record sync, and are retried after
 2 minutes. New pictures fire `ld:files-changed` so Home and project screens repaint.
+
+## Patterns (feature 6)
+
+- **Add a pattern** (`#/pattern-new`): "Fill in from a PDF" reads the PDF **on the device**
+  with Mozilla pdf.js (nothing is sent anywhere) and fills the form; filled fields get a
+  small "From the PDF" tag. The cover is the photo area of page 1 (or the whole page if it
+  has no photos); "Choose" picks another page or a photo.
+- **Reading a PDF** (`js/patterns/`): `pdf.js` (lazy wrapper, loaded only on pattern
+  screens) gives positioned text with bold detection; `parse-lines.js` rebuilds reading
+  order and joins wrapped lines; `sizes.js` reads "S (M) L" and swaps "a (b) c" numbers for
+  one size; `parse-meta.js` finds the details, glossary and read-first notes;
+  `parse-guide.js` builds the guide (cast on, rows, "work as row n", repeats, "once more",
+  final rows, bind off, finishing; anything not understood becomes a text step);
+  `guide-math.js` is the single cursor that rows done, statuses and percentages come from.
+  All parser modules are pure (no DOM), so they can be tested in Node.
+- **Guides** are per pattern per size: Pick your size, then read it from the PDF, copy
+  another size or start fresh, then edit (`#/guide-edit/<id>`): pieces > sections > steps,
+  move up/down, add, delete, undo/redo, review and save.
+- **Follow the guide** (`#/guide/<projectId>`): row and repeat tiles, the full instruction
+  (abbreviations explain themselves when tapped), repeat overview, cast-on tracker, Note /
+  Photo / PDF, "−" one step back, **Next row**, "+" jump to a row. Each step updates the
+  project's counter (rows done overall), session, last worked and the Home card. Lock
+  screen and timer settings are in the menu. Taps follow the counter's rules: pointerdown,
+  paint first, save after.
+- **PDF viewer** (`#/pdf/<patternId>[/<page>]`): pages drawn only when they come into view,
+  sharp on the screen but memory-capped; pinch to zoom, double-tap a page to zoom it.
+- **Files**: the PDF and the cover are kept on the device (`files`, kinds `pdf` / `cover`)
+  and sync through Storage at `<user_id>/patterns/<pattern_id>.pdf` and
+  `<user_id>/patterns/<pattern_id>_cover.jpg`. Covers download on every device; a PDF
+  downloads the first time it's opened, or ahead of time when the project's **Keep files
+  offline** switch is on (a setting of this device only). Replacing a PDF bumps
+  `pdf_version`, so other devices fetch the new one. Settings › Offline shows the space used
+  and can remove downloaded files that are safely online.
+- **Charts**: "Attach a chart image" (a photo or a page of the PDF) on the project page. A
+  paint-your-own chart editor is a later extra.
+
+### Credits
+
+Mozilla **pdf.js** 6.5.438 (`vendor/pdfjs/`, unmodified), Apache License 2.0, see
+`vendor/pdfjs/LICENSE`. Its standard fonts carry their own licences in
+`vendor/pdfjs/standard_fonts/` (`LICENSE_FOXIT`, `LICENSE_LIBERATION`).
 
 ### Setting up Supabase (one time)
 

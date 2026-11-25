@@ -9,6 +9,7 @@ import { byUse } from '../data/counters.js';
 import { esc, timeAgo } from '../ui/dom.js';
 import { ring, basket } from '../ui/illustrations.js';
 import { thumbUrl } from '../data/photos.js';
+import { knitTarget } from '../patterns/ui.js';
 
 /** The most recently worked project (no Quick counter, no drafts), or null. */
 async function heroProject() {
@@ -41,6 +42,7 @@ async function paintHero(slot) {
     return;
   }
   const { p, main, worked } = h;
+  const kt = await knitTarget(p);
   const st = statusOf(p);
   const pct = progressOf(p, main);
   const started = (main && main.value > 0) || !!worked;
@@ -51,7 +53,7 @@ async function paintHero(slot) {
         <p class="hero__eyebrow">${esc(craftLabel(craftOf(p)))} · ${esc(statusLabel(st))}</p>
         <h2 class="hero__name">${esc(p.name || 'Untitled project')}</h2>
         <p class="hero__meta">${worked ? `Last worked ${esc(timeAgo(worked))}` : 'Not started yet'}</p>
-        <a class="hero__pill" href="#/counter/${p.id}">${icons.play}<span>${started ? 'Keep knitting' : 'Start knitting'}</span></a>
+        <a class="hero__pill" href="${kt.href}">${icons.play}<span>${kt.guide ? 'Follow guide' : started ? 'Keep knitting' : 'Start knitting'}</span></a>
       </div>
       ${ring(pct, { size: 64, stroke: 6, cls: 'hero__ring' })}
       <a class="hero__link" href="#/project/${p.id}" aria-label="Open ${esc(p.name || 'project')}"></a>

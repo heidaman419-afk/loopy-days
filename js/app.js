@@ -9,6 +9,13 @@ import * as settings from './screens/settings.js';
 import * as projects from './screens/projects.js';
 import * as project from './screens/project.js';
 import * as projectForm from './screens/project-form.js';
+import * as patterns from './screens/patterns.js';
+import * as pattern from './screens/pattern.js';
+import * as patternForm from './screens/pattern-form.js';
+import * as guideSetup from './screens/guide-setup.js';
+import * as guideEditor from './screens/guide-editor.js';
+import * as guideFollow from './screens/guide-follow.js';
+import * as pdfViewer from './screens/pdf-viewer.js';
 import { placeholder } from './screens/placeholder.js';
 import { startSync } from './sync/engine.js';
 import { catchRecoveryLink } from './sync/auth.js';
@@ -27,7 +34,14 @@ const routes = {
   home,
   stash: placeholder('stash'),
   projects,
-  patterns: placeholder('patterns'),
+  patterns,
+  pattern,                                                                    // #/pattern/<id>
+  'pattern-new': patternForm,                                                 // #/pattern-new
+  'pattern-edit': { fullscreen: true, mount: patternForm.editMount },         // #/pattern-edit/<id>
+  'guide-size': guideSetup,                                                   // #/guide-size/<patternId>[/<sizeId>[/<projectId>]]
+  'guide-edit': guideEditor,                                                  // #/guide-edit/<guideId>[/<projectId>]
+  guide: guideFollow,                                                         // #/guide/<projectId>
+  pdf: pdfViewer,                                                             // #/pdf/<patternId>[/<page>]
   activity: placeholder('activity'),
   counter,
   settings,

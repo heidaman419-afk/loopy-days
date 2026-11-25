@@ -51,7 +51,7 @@ export async function withPhotoBusy(fn) {
  * Full-screen viewer. getUrl() -> Promise<url|null>.
  * actions: { isCover, onCover(), onDelete() }
  */
-export function viewPhoto({ getUrl, isCover, onCover, onDelete }) {
+export function viewPhoto({ getUrl, isCover, onCover, onDelete, noCover = false }) {
   const node = el(`
     <div class="viewer" role="dialog" aria-modal="true" aria-label="Photo">
       <div class="viewer__top">
@@ -59,7 +59,7 @@ export function viewPhoto({ getUrl, isCover, onCover, onDelete }) {
       </div>
       <div class="viewer__stage"><p class="viewer__wait">Loading the photo…</p><img alt="" hidden></div>
       <div class="viewer__bar">
-        <button type="button" class="btn btn--butter" data-cover ${isCover ? 'disabled' : ''}>${icons.star}<span>${isCover ? 'This is the cover' : 'Use as cover'}</span></button>
+        <button type="button" class="btn btn--butter" data-cover ${isCover ? 'disabled' : ''} ${noCover ? 'hidden' : ''}>${icons.star}<span>${isCover ? 'This is the cover' : 'Use as cover'}</span></button>
         <button type="button" class="btn btn--danger-soft viewer__del" data-del>${icons.trash}<span>Delete</span></button>
       </div>
     </div>`);

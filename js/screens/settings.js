@@ -271,8 +271,40 @@ export function mount(root) {
           <span class="sync-line" data-tone="${tone}"><span class="sync-dot"></span><strong>${esc(title)}</strong></span>
           <span>${esc(text)}</span>
         </span>
+      </div>
+      <div class="group__row">
+        <span class="group__icon">${icons.download}</span>
+        <span class="group__text"><strong>Space used on this device</strong>
+          <span data-usage>Working it out…</span></span>
+      </div>
+      <div class="group__row group__row--buttons group__row--one">
+        <button type="button" class="btn btn--secondary" data-free>${icons.trash}<span>Remove downloaded files</span></button>
       </div>`;
+    paintUsage();
   }
+
+  const mb = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1000)} KB`);
+  async function paintUsage() {
+    const { localUsage } = await import('../sync/files.js');
+    const u = await localUsage();
+    const el2 = offlineEl.querySelector('[data-usage]');
+    if (el2) el2.textContent = `${mb(u.bytes)} of photos and pattern PDFs. ${u.removable ? `${mb(u.removable)} of it is safely online and can be removed.` : 'Nothing to remove: everything here is needed or not online yet.'}`;
+    const btn = offlineEl.querySelector('[data-free]');
+    if (btn) btn.disabled = !u.removable;
+  }
+  offlineEl.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-free]')) return;
+    const ok = await confirmDialog({
+      title: 'Remove downloaded files?',
+      message: 'Full-size photos and pattern PDFs that are safely online are removed from this device. Thumbnails and covers stay, and anything opens again from your online space when needed.',
+      ok: 'Remove', cancel: 'Keep them',
+    });
+    if (!ok) return;
+    const { removeDownloaded } = await import('../sync/files.js');
+    const freed = await removeDownloaded();
+    toast(`Freed ${mb(freed)}`);
+    paintUsage();
+  });
 
   renderAccount(true);
   const stopStatus = onStatus((s) => { renderSync(s); paintAccountStatus(); });

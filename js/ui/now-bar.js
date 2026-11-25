@@ -43,7 +43,8 @@ export function startNowBar() {
       if (found.s.status !== before) await db.put('sessions', found.s);
       const all = await db.byIndex('sessions', 'project_id', found.project.id);
       const others = all.filter((x) => x.id !== found.s.id).reduce((n, x) => n + sessionNow(x, settings).ms, 0);
-      current = { ...found, settings, others };
+      const { knitTarget } = await import('../patterns/ui.js');
+      current = { ...found, settings, others, href: (await knitTarget(found.project)).href };
       paint();
       show(true);
     } catch (e) {
@@ -69,7 +70,7 @@ export function startNowBar() {
     bar.querySelector('[data-name]').textContent = name;
     bar.querySelector('[data-state]').textContent = running ? 'Knitting' : 'Paused';
     bar.querySelector('[data-time]').textContent = fmtDuration(others + now.ms);
-    bar.querySelector('[data-open]').href = project.kind === 'quick' ? '#/counter' : `#/counter/${project.id}`;
+    bar.querySelector('[data-open]').href = current.href || (project.kind === 'quick' ? '#/counter' : `#/counter/${project.id}`);
     bar.querySelector('[data-open]').setAttribute('aria-label', `${esc(name)}, ${running ? 'knitting' : 'paused'}. Open its counter`);
   }
 

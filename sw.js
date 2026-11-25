@@ -1,7 +1,7 @@
 // Loopy Days service worker: caches every app file so the app opens with no signal.
 // Bump VERSION whenever any file changes; the old cache is removed on activate.
 
-const VERSION = 'loopy-days-v7'; // keep equal to APP_VERSION in js/version.js
+const VERSION = 'loopy-days-v8'; // keep equal to APP_VERSION in js/version.js
 
 const FILES = [
   './',
@@ -51,6 +51,42 @@ const FILES = [
   './js/screens/lock.js',
   './js/screens/timer-settings.js',
   './js/screens/settings.js',
+  // Feature 6: patterns
+  './css/patterns.css',
+  './js/data/patterns.js',
+  './js/patterns/guide-math.js',
+  './js/patterns/parse-guide.js',
+  './js/patterns/parse-lines.js',
+  './js/patterns/parse-meta.js',
+  './js/patterns/pdf.js',
+  './js/patterns/read-pdf.js',
+  './js/patterns/sizes.js',
+  './js/patterns/start-project.js',
+  './js/patterns/ui.js',
+  './js/screens/patterns.js',
+  './js/screens/pattern.js',
+  './js/screens/pattern-form.js',
+  './js/screens/guide-setup.js',
+  './js/screens/guide-editor.js',
+  './js/screens/guide-follow.js',
+  './js/screens/pdf-viewer.js',
+  // Mozilla pdf.js (vendor, unmodified)
+  './vendor/pdfjs/pdf.mjs',
+  './vendor/pdfjs/pdf.worker.mjs',
+  './vendor/pdfjs/standard_fonts/FoxitDingbats.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitFixed.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitFixedBold.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitFixedBoldItalic.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitFixedItalic.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitSerif.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitSerifBold.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitSerifBoldItalic.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitSerifItalic.pfb',
+  './vendor/pdfjs/standard_fonts/FoxitSymbol.pfb',
+  './vendor/pdfjs/standard_fonts/LiberationSans-Bold.ttf',
+  './vendor/pdfjs/standard_fonts/LiberationSans-BoldItalic.ttf',
+  './vendor/pdfjs/standard_fonts/LiberationSans-Italic.ttf',
+  './vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf',
 ];
 
 self.addEventListener('install', (event) => {

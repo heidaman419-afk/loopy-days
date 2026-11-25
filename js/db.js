@@ -10,7 +10,20 @@
 
 const DB_NAME = 'loopy-days';
 
-export const STORES = ['projects', 'counters', 'counter_events', 'row_notes', 'sessions', 'settings', 'photos'];
+export const STORES = ['projects', 'counters', 'counter_events', 'row_notes', 'sessions', 'settings', 'photos',
+  'patterns', 'guides', 'guide_progress'];
+
+/** A stable UUID made from a text (FNV-1a based), for records two devices must agree on. */
+export function uuidFrom(text) {
+  let h = '';
+  for (let k = 0; k < 4; k++) {
+    let x = 0x811c9dc5 ^ (k * 0x9e3779b1);
+    for (let i = 0; i < text.length; i++) { x ^= text.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
+    x ^= x >>> 13; x = Math.imul(x, 0x5bd1e995) >>> 0; x ^= x >>> 15;
+    h += (x >>> 0).toString(16).padStart(8, '0');
+  }
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${(8 | (parseInt(h[16], 16) & 3)).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
 
 // Stores that stay on this device only: never pushed, never pulled, not counted as
 // "waiting to sync". 'files' holds photo bytes (they travel through Supabase Storage).
@@ -51,6 +64,13 @@ const MIGRATIONS = [
     makeStore(db, 'photos', [['project_id', 'project_id']]);
     const f = db.createObjectStore('files', { keyPath: 'id' });
     f.createIndex('project_id', 'project_id');
+  },
+  // v3 (feature 6): patterns, their guides (one per size) and each project's place in a guide
+  (db, tx) => {
+    makeStore(db, 'patterns');
+    makeStore(db, 'guides', [['pattern_id', 'pattern_id']]);
+    makeStore(db, 'guide_progress', [['project_id', 'project_id']]);
+    tx.objectStore('files').createIndex('pattern_id', 'pattern_id');
   },
 ];
 

@@ -124,6 +124,7 @@ export async function deleteProject(id) {
   for (const e of await db.latest('counter_events', 'project_at', range, Infinity)) {
     entries.push(['counter_events', Object.assign(e, { deleted: true })]);
   }
+  for (const gp of await db.byIndex('guide_progress', 'project_id', id)) entries.push(['guide_progress', Object.assign(gp, { deleted: true })]);
   const photos = await db.byIndex('photos', 'project_id', id);
   for (const ph of photos) entries.push(['photos', Object.assign(ph, { deleted: true })]);
   await db.putMany(entries);

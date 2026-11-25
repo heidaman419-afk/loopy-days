@@ -14,6 +14,7 @@ import { isConfigured, getSession, apiFetch, onAuthChange, SyncError } from './a
 import { reconcileQuickProject } from '../data/projects.js';
 import { syncFiles } from './files.js';
 import { refreshUrls } from '../data/photos.js';
+import { refreshPatternUrls } from '../data/patterns.js';
 
 const PUSH_BATCH = 200;
 const PULL_PAGE = 1000;
@@ -199,6 +200,7 @@ async function runOnce() {
     const files = await syncFiles(userId);
     if (files.length) {
       refreshUrls(files);
+      refreshPatternUrls(files);
       window.dispatchEvent(new CustomEvent('ld:files-changed', { detail: { ids: files } }));
     }
     failures = 0;
