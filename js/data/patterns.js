@@ -166,6 +166,28 @@ export async function saveGuide(pattern, sizeId, tree, status = 'draft') {
   return db.put('guides', g);
 }
 
+/**
+ * Make a ready-to-follow guide straight from the PDF text, without asking.
+ * Only sizes that have no guide yet are built, so edits made by hand are never replaced.
+ * Returns the number of guides made. Quietly does nothing if the PDF gave no rows to follow.
+ */
+export async function autoGuides(pattern, onlySizeId) {
+  if (!pattern || !(pattern.source_groups || []).length) return 0;
+  const sizes = (pattern.sizes || []).length ? pattern.sizes.map((s) => s.id) : [null];
+  const wanted = onlySizeId !== undefined ? sizes.filter((id) => id === (onlySizeId || null) || (!onlySizeId && id === null)) : sizes;
+  let made = 0;
+  for (const sizeId of wanted) {
+    const existing = await db.get('guides', guideId(pattern.id, sizeId));
+    if (existing && !existing.deleted) continue;
+    let tree;
+    try { tree = guideFromPdf(pattern, sizeId); } catch (e) { console.warn('auto guide', e); continue; }
+    if (!tree || !(totalRows(tree) > 0)) continue;
+    await saveGuide(pattern, sizeId, tree, 'ready');
+    made++;
+  }
+  return made;
+}
+
 /* ---------- progress ---------- */
 
 export const progressId = (projectId) => db.uuidFrom(`progress:${projectId}`);

@@ -6,7 +6,7 @@ import { icons } from '../ui/icons.js';
 import { esc, el } from '../ui/dom.js';
 import { openSheet, confirmDialog, toast } from '../ui/overlay.js';
 import {
-  newPatternRecord, getPattern, savePattern, setPatternPdf, setPatternCover, removePatternCover, removePatternPdf,
+  newPatternRecord, getPattern, savePattern, autoGuides, setPatternPdf, setPatternCover, removePatternCover, removePatternPdf,
   coverUrl, pdfBlob, deletePattern, CATEGORIES, DIFFICULTIES, WEIGHTS, categoryLabel, guessCategory,
 } from '../data/patterns.js';
 import { CRAFTS } from '../data/projects.js';
@@ -401,6 +401,8 @@ export async function mount(root, params, editing = false) {
       if (pending.cover) await setPatternCover(pattern, pending.cover);
       else if (pending.removeCover) await removePatternCover(pattern);
       await savePattern(pattern);
+      // New pattern read from a PDF: build its step-by-step guides right away.
+      if (!editing) { try { pattern.auto_guides = await autoGuides(pattern); } catch (e) { console.warn(e); } }
       saved = true;
       if (editing) { toast('Changes saved'); location.hash = `#/pattern/${pattern.id}`; return; }
       addedScreen(pattern);
@@ -417,7 +419,7 @@ export async function mount(root, params, editing = false) {
         <div class="added__badge">${icons.check}</div>
         <h1 class="added__title">Pattern added</h1>
         <p class="added__name">${esc(p.name)}</p>
-        <p class="settings__p">It’s in your patterns now${p.pdf_file_id ? ', with its PDF' : ''}. Start knitting it, or have a look first.</p>
+        <p class="settings__p">It’s in your patterns now${p.pdf_file_id ? ', with its PDF' : ''}. ${p.auto_guides ? `Step-by-step guide${p.auto_guides > 1 ? 's' : ''} ready for ${p.auto_guides > 1 ? `all ${p.auto_guides} sizes` : 'it'}, so you can start right away. ` : ''}Start knitting it, or have a look first.</p>
         <div class="added__actions">
           <button type="button" class="btn btn--butter btn--block" data-start>${icons.play}<span>Start a project</span></button>
           <a class="btn btn--secondary btn--block" href="#/pattern/${p.id}">View pattern</a>

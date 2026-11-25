@@ -7,7 +7,7 @@ import { icons } from '../ui/icons.js';
 import { openSheet, toast } from '../ui/overlay.js';
 import { newProjectRecord } from '../data/projects.js';
 import { newCounter } from '../data/counters.js';
-import { guideId } from '../data/patterns.js';
+import { guideId, autoGuides } from '../data/patterns.js';
 
 /** Ask for one of the pattern's sizes. Resolves to a size id, '' (no sizes) or null (cancelled). */
 export function askSize(pattern, { title = 'Pick your size', current = null } = {}) {
@@ -44,6 +44,8 @@ export async function startProjectFrom(pattern) {
   const p = newProjectRecord({
     name: pattern.name, craft: pattern.craft || 'knitting', pattern_id: pattern.id, size_id: sizeId || null,
   });
+  // Make sure the chosen size has a guide (built from the PDF if there isn't one yet).
+  try { await autoGuides(pattern, sizeId || null); } catch (e) { console.warn(e); }
   const guide = await db.get('guides', guideId(pattern.id, sizeId || null));
   const counter = newCounter(p.id, { is_main: true, name: 'Rows', target: guide && !guide.deleted && guide.total_rows ? guide.total_rows : null });
   await db.putMany([['projects', p], ['counters', counter]]);

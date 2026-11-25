@@ -18,8 +18,12 @@ import { refreshPatternUrls } from '../data/patterns.js';
 
 const PUSH_BATCH = 200;
 const PULL_PAGE = 1000;
-const WRITE_DEBOUNCE_MS = 3000;
-const INTERVAL_MS = 60000;
+const WRITE_DEBOUNCE_MS = 1500;
+// How often an open, visible app asks for the other device's changes.
+const KNITTING_POLL_MS = 5000;   // on the counter / follow-guide screens
+const OTHER_POLL_MS = 20000;     // anywhere else
+const TICK_MS = 5000;
+const onKnittingScreen = () => /^#\/(counter|guide)(\/|$)/.test(location.hash || '');
 const BACKOFF_MS = [5000, 15000, 30000, 60000, 120000, 300000];
 const LOCAL_KEY = 'ld-sync';
 
@@ -252,9 +256,14 @@ export function startSync() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') syncNow();
   });
+  let lastPoll = Date.now();
   intervalTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') syncNow();
-  }, INTERVAL_MS);
+    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    const every = onKnittingScreen() ? KNITTING_POLL_MS : OTHER_POLL_MS;
+    if (Date.now() - lastPoll < every - 50) return;
+    lastPoll = Date.now();
+    syncNow();
+  }, TICK_MS);
   onAuthChange((s) => {
     refreshBaseState();
     if (s) { failures = 0; syncNow(); } else { clearTimeout(retryTimer); }
