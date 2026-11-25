@@ -202,7 +202,8 @@ export async function mount(root, params, editing = false) {
     } catch (e) {
       console.error(e);
       prog.remove();
-      toast('That PDF couldn’t be read. You can still fill the form in by hand.', { ms: 4000 });
+      const why = String((e && (e.name && e.name !== 'Error' ? e.name + ': ' : '') + (e && e.message || e)) || 'unknown').slice(0, 120);
+      toast(`That PDF couldn’t be read. You can still fill the form in by hand. (${why})`, { ms: 9000 });
     } finally { clearInterval(tick); }
   }
 

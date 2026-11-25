@@ -79,20 +79,20 @@ function viewer(host, { title, page = 1, onClose }) {
         for (const en of entries) {
           if (en.isIntersecting) draw(en.target);
         }
-        const vis = entries.filter((x) => x.isIntersecting).map((x) => +x.target.dataset.page);
-        if (vis.length) ind.textContent = `Page ${Math.min(...vis)} of ${doc.numPages}`;
       }, { root: pagesEl, rootMargin: '300px 0px' });
       pagesEl.querySelectorAll('.pdfv__pagewrap').forEach((w2) => io.observe(w2));
       // Keep the indicator right while scrolling.
-      pagesEl.addEventListener('scroll', () => {
-        const mid = pagesEl.scrollTop + pagesEl.clientHeight / 3;
+      // One rule only: the page under the top third of the view is "the" page.
+      const showPage = () => {
+        const line = pagesEl.getBoundingClientRect().top + pagesEl.clientHeight / 3;
         let cur = 1;
-        for (const w2 of pagesEl.children) if (w2.offsetTop <= mid) cur = +w2.dataset.page;
+        for (const w2 of pagesEl.children) if (w2.dataset.page && w2.getBoundingClientRect().top <= line) cur = +w2.dataset.page;
         ind.textContent = `Page ${cur} of ${doc.numPages}`;
-      }, { passive: true });
-      ind.textContent = `Page ${Math.min(page, doc.numPages)} of ${doc.numPages}`;
+      };
+      pagesEl.addEventListener('scroll', showPage, { passive: true });
       const target = pagesEl.querySelector(`[data-page="${Math.min(page, doc.numPages)}"]`);
-      if (target && page > 1) pagesEl.scrollTop = target.offsetTop - 8;
+      if (target && page > 1) pagesEl.scrollTop += target.getBoundingClientRect().top - pagesEl.getBoundingClientRect().top - 8;
+      showPage();
       // Double-tap / double-click a page to zoom it (re-drawn sharp at the new size).
       let lastTap = 0;
       pagesEl.addEventListener('click', (e) => {
@@ -110,7 +110,7 @@ function viewer(host, { title, page = 1, onClose }) {
       });
     } catch (e) {
       console.error(e);
-      fail('This PDF couldn’t be opened.');
+      fail(`This PDF couldn’t be opened. (${String((e && e.message) || e).slice(0, 120)})`);
     }
   }
 
