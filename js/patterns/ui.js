@@ -13,8 +13,33 @@ export const groupIcon = (group) => ({
 export const categoryIcon = (key) => groupIcon(categoryGroup(key));
 
 export const KIND_LABEL = {
-  cast_on: 'Cast on', rows: 'Rows', repeat: 'Repeat', text: 'Text', bind_off: 'Bind off', pick_up: 'Pick up', chart: 'Chart',
+  cast_on: 'Cast on', rows: 'Rows', repeat: 'Repeat', measure: 'Measure', text: 'Text', bind_off: 'Bind off', pick_up: 'Pick up', chart: 'Chart',
 };
+
+/** Yarn options as HTML: "or" between options, "held together with" between yarns of one option. */
+export function yarnListHTML(yarns = [], { notes = false } = {}) {
+  return yarnGroups(yarns).map((g, gi) => `${gi ? '<span class="or-line"><span>or</span></span>' : ''}
+    ${g.label ? `<span class="yarn-card__label">${esc(g.label)}</span>` : ''}
+    ${g.yarns.map((y, yi) => `${yi ? '<span class="yarn-card__with">held together with</span>' : ''}
+      <span class="yarn-card__item"><strong>${esc(yarnTitle(y))}</strong><span>${esc(yarnAmount(y))}</span>${y.fibre ? `<span class="yarn-card__note">${esc(y.fibre)}</span>` : ''}${notes && y.notes ? `<span class="yarn-card__note">${esc(y.notes)}</span>` : ''}</span>`).join('')}`).join('');
+}
+
+/** "Sleeves (x2)" */
+export const pieceLabel = (p) => `${p.name}${(p.times || 1) > 1 ? ` (x${p.times})` : ''}`;
+
+/**
+ * Yarn alternatives for display: [[yarn, yarn held together], [other alternative], …]
+ * (older patterns without `alt` treat every yarn as its own alternative).
+ */
+export function yarnGroups(yarns = []) {
+  const groups = [];
+  yarns.forEach((y, i) => {
+    const alt = y.alt != null ? y.alt : i;
+    const g = groups.find((x) => x.alt === alt);
+    if (g) g.yarns.push(y); else groups.push({ alt, label: y.label || '', yarns: [y] });
+  });
+  return groups;
+}
 
 /** Short line describing a block: "Repeat 60 times · 6 rows". */
 export function blockSummary(b) {
@@ -23,6 +48,8 @@ export function blockSummary(b) {
   if (b.kind === 'rows') return `${n} ${n === 1 ? 'row' : 'rows'}`;
   if (b.kind === 'cast_on') return `${b.stitches || '?'} sts${b.method ? ` · ${b.method}` : ''}`;
   if (b.kind === 'pick_up') return `${b.stitches || '?'} sts`;
+  if (b.kind === 'measure') return `until ${b.target || 'the length given'}${b.tally_target ? ` · ${b.tally_target} ${String(b.tally_label || 'times').replace(/ done$/, '').toLowerCase()}` : ''}`;
+  if (b.kind === 'bind_off' && b.method) return `${b.method} bind off`;
   if (b.kind === 'chart') return b.image_file_id ? 'Chart image' : 'Chart';
   return (b.text || '').slice(0, 60);
 }

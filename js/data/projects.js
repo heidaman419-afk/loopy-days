@@ -80,6 +80,8 @@ export async function mainCounterOf(projectId) {
 /** 0-100. Finished = 100; with a goal = count / goal; otherwise 0. */
 export function progressOf(project, main) {
   if (statusOf(project) === 'finished') return 100;
+  // Following a guide: its own progress (fixed rows and steps like "work until 30 cm").
+  if (project && project.pattern_id && typeof project.guide_pct === 'number') return Math.max(0, Math.min(100, project.guide_pct));
   if (main && main.target > 0) return Math.max(0, Math.min(100, Math.round((main.value / main.target) * 100)));
   return 0;
 }

@@ -6,9 +6,9 @@ import * as db from '../db.js';
 import { icons } from '../ui/icons.js';
 import { esc, el } from '../ui/dom.js';
 import { openSheet, confirmDialog, promptDialog, toast } from '../ui/overlay.js';
-import { getGuide, getPattern, saveGuide } from '../data/patterns.js';
+import { getGuide, getPattern, saveGuide, rebuildGuide, planRebuild } from '../data/patterns.js';
 import { counts, totalRows, flatten } from '../patterns/guide-math.js';
-import { KIND_LABEL, blockSummary } from '../patterns/ui.js';
+import { KIND_LABEL, blockSummary, pieceLabel } from '../patterns/ui.js';
 
 export const fullscreen = true;
 const nid = (p) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -40,7 +40,7 @@ export async function mount(root, params) {
   function paint() {
     const c = counts(tree);
     const flat = flatten(tree);
-    const range = (b) => { const f = flat.find((x) => x.block.id === b.id); return f && f.rows ? `Rows ${f.start}–${f.end}` : ''; };
+    const range = (b) => { const f = flat.find((x) => x.block.id === b.id); return f && f.rows ? (f.start === f.end ? `Row ${f.start}` : `Rows ${f.start}–${f.end}`) : ''; };
     const u = undo[undo.length - 1]; const r = redo[redo.length - 1];
     root.innerHTML = `
       <header class="ged-head">
@@ -62,7 +62,7 @@ export async function mount(root, params) {
         ${tree.pieces.map((p, pi) => `
           <section class="ged-piece" data-piece="${p.id}">
             <div class="ged-card ged-card--piece">
-              <span class="ged-card__text"><strong>${esc(p.name)}</strong><small>${p.sections.length} ${p.sections.length === 1 ? 'section' : 'sections'}</small></span>
+              <span class="ged-card__text"><strong>${esc(pieceLabel(p))}</strong><small>${p.sections.length} ${p.sections.length === 1 ? 'section' : 'sections'}${(p.times || 1) > 1 ? ` · worked ${p.times} times` : ''}</small></span>
               <span class="kind-tag kind-tag--piece">Piece</span>
               <button type="button" class="icon-btn icon-btn--small" data-piece-menu="${p.id}" aria-label="Piece options">${icons.more}</button>
             </div>
@@ -93,6 +93,7 @@ export async function mount(root, params) {
       </main>
       <footer class="ged-foot">
         ${pattern.pdf_file_id ? `<a class="btn btn--secondary" href="#/pdf/${pattern.id}">${icons.file}<span>View PDF</span></a>` : ''}
+        ${(pattern.source_groups || []).length ? `<button type="button" class="btn btn--secondary" data-rebuild aria-label="Rebuild from the PDF">${icons.repeat}<span>Rebuild</span></button>` : ''}
         <button type="button" class="btn btn--butter" data-review>Continue to review</button>
       </footer>`;
   }
@@ -112,6 +113,13 @@ export async function mount(root, params) {
         <label class="field"><span class="field__label">Name</span><input class="input" name="title" value="${esc(b.title || '')}" maxlength="60"></label>
         <div class="field"><span class="field__label">Kind</span><div class="chips chips--small">${kinds.map(([k, l]) => `<button type="button" class="chip ${b.kind === k ? 'is-on' : ''}" data-kind="${k}">${l}</button>`).join('')}</div></div>
         ${b.kind === 'repeat' ? `<label class="field"><span class="field__label">How many times</span><input class="input" name="times" inputmode="numeric" pattern="[0-9]*" value="${b.times || 1}"></label>` : ''}
+        ${b.kind === 'measure' ? `
+          <label class="field"><span class="field__label">Work until it measures</span><input class="input" name="target" value="${esc(b.target || '')}" placeholder="e.g. 30 cm / 12 in"></label>
+          <div class="pform__two">
+            <label class="field"><span class="field__label">Count something too (optional)</span><input class="input" name="tally_label" value="${esc(b.tally_label || '')}" placeholder="e.g. Decreases"></label>
+            <label class="field"><span class="field__label">How many</span><input class="input" name="tally_target" inputmode="numeric" pattern="[0-9]*" value="${b.tally_target || ''}"></label>
+          </div>` : ''}
+        ${b.kind === 'bind_off' ? `<label class="field"><span class="field__label">Method</span><input class="input" name="method" value="${esc(b.method || '')}" placeholder="e.g. Italian, stretchy"></label>` : ''}
         ${b.kind === 'cast_on' || b.kind === 'pick_up' ? `<div class="pform__two">
           <label class="field"><span class="field__label">Stitches</span><input class="input" name="stitches" inputmode="numeric" pattern="[0-9]*" value="${b.stitches || ''}"></label>
           ${b.kind === 'cast_on' ? `<label class="field"><span class="field__label">Method</span><input class="input" name="method" value="${esc(b.method || '')}" placeholder="e.g. long-tail"></label>` : ''}</div>` : ''}
@@ -138,6 +146,7 @@ export async function mount(root, params) {
     body.addEventListener('input', (e) => {
       const t = e.target;
       if (t.name === 'times') b.times = Math.max(1, parseInt(t.value, 10) || 1);
+      else if (t.name === 'tally_target') b.tally_target = parseInt(t.value, 10) || null;
       else if (t.name === 'stitches') b.stitches = parseInt(t.value, 10) || 0;
       else if (t.name) b[t.name] = t.value;
       if (t.matches('[data-row-text]')) { const r = b.rows[+t.closest('[data-row]').dataset.row]; r.text = t.value; delete r.same_as; }
@@ -192,8 +201,13 @@ export async function mount(root, params) {
   async function pieceMenu(id) {
     const i = tree.pieces.findIndex((p) => p.id === id);
     const p = tree.pieces[i];
-    const m = await menu(p.name, [['rename', 'Rename', icons.pencil], ['up', 'Move up', icons.up], ['down', 'Move down', icons.down], ['delete', 'Delete piece', icons.trash]]);
+    const m = await menu(p.name, [['rename', 'Rename', icons.pencil], ['times', 'Worked how many times', icons.repeat], ['up', 'Move up', icons.up], ['down', 'Move down', icons.down], ['delete', 'Delete piece', icons.trash]]);
     if (m === 'rename') { const n = await promptDialog({ title: 'Rename piece', label: 'Name', value: p.name, maxlength: 60 }); if (n) commit(`Rename ${n}`, () => { p.name = n; }); }
+    if (m === 'times') {
+      const n = await promptDialog({ title: `How many times is ${p.name} worked?`, label: 'Times (e.g. 2 for two sleeves)', value: String(p.times || 1), numeric: true, maxlength: 2 });
+      const v = Math.max(1, Math.min(20, parseInt(n, 10) || 0));
+      if (n !== null && v) commit(`${p.name} x${v}`, () => { p.times = v; });
+    }
     if (m === 'up') commit(`Move ${p.name}`, () => move(tree.pieces, i, -1));
     if (m === 'down') commit(`Move ${p.name}`, () => move(tree.pieces, i, 1));
     if (m === 'delete' && await confirmDialog({ title: `Delete “${p.name}”?`, message: 'The piece and everything in it are removed. You can undo this.', ok: 'Delete', danger: true })) {
@@ -262,6 +276,27 @@ export async function mount(root, params) {
     else if (hit('[data-section-menu]')) sectionMenu(hit('[data-section-menu]').dataset.sectionMenu);
     else if (hit('[data-piece-menu]')) pieceMenu(hit('[data-piece-menu]').dataset.pieceMenu);
     else if (hit('[data-review]')) review();
+    else if (hit('[data-rebuild]')) {
+      const plan = await planRebuild(pattern, guide.size_id);
+      const { measured, tallies } = plan.lost;
+      const lostText = measured || tallies
+        ? ` Some counts belong to steps that won’t be in the rebuilt guide (${[measured ? `${measured} measured ${measured === 1 ? 'row' : 'rows'}` : '', tallies ? `${tallies} tallied ${tallies === 1 ? 'step' : 'steps'}` : ''].filter(Boolean).join(', ')}). They will be kept aside and no longer counted.`
+        : '';
+      const ok = await confirmDialog({
+        title: 'Rebuild from the PDF?',
+        message: `The guide is read again from the pattern PDF with the newest reader. Changes you made here by hand will be replaced. Projects keep their place by rows done.${lostText}`,
+        ok: 'Rebuild', danger: true, cancel: 'Keep my guide',
+      });
+      if (!ok) return;
+      clearTimeout(saveTimer); saveTimer = null;
+      const g = await rebuildGuide(pattern, guide.size_id, plan.tree);
+      if (!g) { toast('Nothing could be read from the PDF for this size.'); return; }
+      snapshot('Rebuild from PDF');
+      tree = JSON.parse(JSON.stringify(g.tree));
+      guide.status = 'ready';
+      paint();
+      toast('Guide read again from the PDF');
+    }
   });
 
   paint();

@@ -62,15 +62,69 @@ export function pageLines(page) {
   return out;
 }
 
-const STRUCT_START = /^(?:(?:Row|Rows|Rnd|Rnds|Round|Rounds)\s+\d|Cast on|CO\b|Work |Now work|Repeat |Rep |Bind off|BO\b|Pick up|Weave in|Next row|Next rnd|Set-?up|Join\b|Place marker|Continue)/i;
+// Row labels must start with a capital ("Rnd 1", "German Short Row 3"); a wrapped line that
+// happens to begin with "rnd 11.5 cm" is a continuation, not a new row.
+const ROW_START = /^(?:[A-Z][\w-]*\s+){0,3}(?:Row|Rows|Rnd|Rnds|Round|Rounds)\s+\d/;
+const OTHER_START = /^(?:Cast on|CO\b|Work |Now work|Repeat |Rep |Bind off|BO\b|Pick up|Weave in|Next row|Next rnd|Set-?up|Join\b|Place marker|Continue)/i;
+const STRUCT_START = { test: (t) => ROW_START.test(t) || OTHER_START.test(t) };
 
 /** Drop page numbers and rule lines; join wrapped lines into logical lines. */
+/** Running headers/footers: the same text (numbers ignored) at the same height on most pages. */
+function runningKeys(all) {
+  const key = (l) => `${l.text.replace(/\d+/g, '').replace(/\s+/g, ' ').trim().toLowerCase()}|${Math.round(l.y / 6)}`;
+  const pagesOf = new Map();
+  for (const l of all) {
+    const k = key(l);
+    if (!pagesOf.has(k)) pagesOf.set(k, new Set());
+    pagesOf.get(k).add(l.page);
+  }
+  const nPages = new Set(all.map((l) => l.page)).size;
+  // Short PDFs (2-4 pages): a line seen on 2+ pages counts too, but only in the top/bottom margin band.
+  const inBand = (l) => { const h = l.pageH || 842; return l.y < h * 0.12 || l.y > h * 0.88; };
+  const banded = new Set(all.filter(inBand).map(key));
+  const keys = new Set();
+  for (const [k, s] of pagesOf) {
+    if ((s.size >= 3 && s.size >= nPages * 0.5) || (nPages <= 4 && s.size >= 2 && banded.has(k))) keys.add(k);
+  }
+  return { keys, key };
+}
+
+/**
+ * The document's ordinary distance between wrapped lines of one paragraph, per font size:
+ * the smallest gap that occurs at least 3 times between same-size, same-edge lines.
+ */
+function linePitch(visual) {
+  const gaps = new Map();
+  for (const lines of visual) {
+    for (let i = 1; i < lines.length; i++) {
+      const a = lines[i - 1]; const b = lines[i];
+      if (Math.abs(a.fs - b.fs) > 0.5 || Math.abs(a.x - b.x) > 3) continue;
+      const g = Math.round((a.y - b.y) * 2) / 2;
+      if (g <= 0 || g > a.fs * 2.5) continue;
+      const fs = Math.round(a.fs);
+      if (!gaps.has(fs)) gaps.set(fs, new Map());
+      const m = gaps.get(fs);
+      m.set(g, (m.get(g) || 0) + 1);
+    }
+  }
+  const out = new Map();
+  for (const [fs, m] of gaps) {
+    const common = [...m.entries()].filter(([, n]) => n >= 3).map(([g]) => g).sort((x, y) => x - y);
+    if (common.length) out.set(fs, common[0]);
+  }
+  return out;
+}
+
 export function logicalLines(pages) {
   const out = [];
-  for (const page of pages) {
-    const lines = pageLines(page).filter((l) =>
+  const visual = pages.map((page) => pageLines(page));
+  const run = runningKeys(visual.flat());
+  pitch = linePitch(visual);
+  for (let pi = 0; pi < pages.length; pi++) {
+    const lines = visual[pi].filter((l) =>
       !/^\d{1,3}$/.test(l.text) &&                 // page numbers
-      !/^[_\-–—=.·•\s]{5,}$/.test(l.text));       // rule lines
+      !/^[_\-–—=.·•\s]{5,}$/.test(l.text) &&      // rule lines
+      !run.keys.has(run.key(l)));                  // running headers / footers
     let prev = null;
     for (const l of lines) {
       const gap = prev ? prev.y - l.y : Infinity;
@@ -92,9 +146,36 @@ export function logicalLines(pages) {
   return out;
 }
 
+const ONLY_LABEL = /^\s*only\s+(?:for\s+)?sizes?\b[^:]{0,80}:\s*$/i;
+const LIST_ITEM = /^(?:[a-z]\.|\d+\.|[•\-–])\s/;
+const ROW_LABEL = /^(?:[A-Z][\w-]*\s+){0,3}(?:Rows?|Rnds?|Rounds?)\s+\d[\d\s,–-]*(?:\s*\((?:RS|WS)\))?\s*:\s*$/;
+const GLOSS_START =/^[^\s=]{1,14}(?:\s[^\s=]{1,14})?\s+=\s/;   // "m1l = …": a new glossary entry
+let pitch = new Map();                                          // set by logicalLines()
+
 function isContinuation(prev, l) {
   if (l.page !== prev.page) return false;
+  const gap = prev.y - l.y;
+  const normal = gap < Math.max(l.fs, prev.fs) * 1.95;      // ordinary line spacing, no blank line
+  // Plain paragraphs: same font size, not a new "term = …" entry, and not a sentence that ended
+  // above a gap clearly bigger than the document's wrapped-line spacing (tight paragraph spacing).
+  const p = pitch.get(Math.round(l.fs));
+  const newPara = p && gap > p * 1.3 && /[.!:]["”’)]?\s*$/.test(prev.text) && /^[A-Z*(]/.test(l.text);
+  const plainOk = Math.abs(l.fs - prev.fs) <= 0.5 && !GLOSS_START.test(l.text) && !newPara;
+  const sameX = Math.abs(l.x - prev.x) <= 3;
+  const single = prev.parts.length === 1 && l.parts.length === 1;
+  // "Only sizes (S, M):" on its own line owns the lines right under it, whatever they are.
+  if (ONLY_LABEL.test(prev.text) && gap < Math.max(l.fs, prev.fs) * 2.15 && sameX && single) return true;
+  // A sentence cut after a comma, or going on in lower case, continues on the next line
+  // even when that line starts with a step word ("…sleeve sts," / "pick up and knit 4 sts.").
+  if (!prev.bold && !l.bold && normal && sameX && single && Math.abs(l.fs - prev.fs) <= 0.5 && !GLOSS_START.test(l.text)
+    && (/[,;]\s*$/.test(prev.text) || (/[a-z)]\s*$/.test(prev.text) && /^[a-z]/.test(l.text)))) return true;
   if (STRUCT_START.test(l.text) && l.x <= prev.x + 2) return false;
+  // A bold label ending in ':' ("Rnd 1:", "Gauge:") owns the plain lines right under it.
+  // Row labels on their own line ("Rnd 1:", "Short Row 3 (RS):") may sit a little further up.
+  const labelNear = ROW_LABEL.test(prev.text) ? gap < Math.max(l.fs, prev.fs) * 2.15 : normal;
+  if (prev.bold && /:\s*$/.test(prev.text) && !l.bold && labelNear && sameX && single && !LIST_ITEM.test(l.text)) return true;
+  // Plain lines at ordinary spacing belong to the same paragraph.
+  if (!prev.bold && !l.bold && normal && sameX && single && plainOk && !LIST_ITEM.test(l.text)) return true;
   // Indented under the previous line's value column (label/value tables, "Row n:" entries).
   if (prev.parts.length > 1) {
     const valueX = prev.parts[1].x;
@@ -104,7 +185,7 @@ function isContinuation(prev, l) {
   const width = prev.pageW || 600;
   // (Only plain one-column lines: label/value rows and "Row n:" entries never merge this way.)
   if (prev.parts.length === 1 && l.parts.length === 1 && Math.abs(l.x - prev.x) <= 3
-    && prev.xEnd > width * 0.72 && !l.bold && !prev.bold && !STRUCT_START.test(l.text)) return true;
+    && prev.xEnd > width * 0.72 && !l.bold && !prev.bold && !STRUCT_START.test(l.text) && plainOk) return true;
   return false;
 }
 

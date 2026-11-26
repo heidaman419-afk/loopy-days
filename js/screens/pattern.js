@@ -10,7 +10,7 @@ import {
   categoryLabel, difficultyLabel, guidesOf,
 } from '../data/patterns.js';
 import { craftLabel, statusOf, statusLabel } from '../data/projects.js';
-import { categoryIcon, yarnTitle, yarnAmount } from '../patterns/ui.js';
+import { categoryIcon, yarnListHTML } from '../patterns/ui.js';
 import { startProjectFrom } from '../patterns/start-project.js';
 
 export const fullscreen = true;
@@ -84,8 +84,7 @@ export async function mount(root, params) {
 
         <section class="psec">
           <h2 class="sec-title">${icons.yarn}<span>Yarn</span></h2>
-          ${(p.yarns || []).length ? `<div class="yarn-card yarn-card--static">${p.yarns.map((y, i) => `${i ? '<span class="or-line"><span>or</span></span>' : ''}
-            <span class="yarn-card__item"><strong>${esc(yarnTitle(y))}</strong><span>${esc(yarnAmount(y))}</span>${y.notes ? `<span class="yarn-card__note">${esc(y.notes)}</span>` : ''}</span>`).join('')}</div>` : '<p class="settings__p">No yarn noted yet.</p>'}
+          ${(p.yarns || []).length ? `<div class="yarn-card yarn-card--static">${yarnListHTML(p.yarns, { notes: true })}</div>` : '<p class="settings__p">No yarn noted yet.</p>'}
         </section>
 
         ${(p.tools || []).length ? `<section class="psec"><h2 class="sec-title">${icons.tools}<span>Tools and notions</span></h2>

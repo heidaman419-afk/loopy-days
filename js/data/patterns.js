@@ -12,7 +12,7 @@
 // files (this device only): kind 'pdf' | 'cover' with pattern_id, plus the bytes.
 
 import * as db from '../db.js';
-import { buildGuide } from '../patterns/parse-guide.js';
+import { buildGuide, GUIDE_READER_VERSION } from '../patterns/parse-guide.js';
 import { totalRows, clamp } from '../patterns/guide-math.js';
 
 export const CATEGORIES = [
@@ -153,16 +153,71 @@ export async function getGuide(id) {
 export function guideFromPdf(pattern, sizeId) {
   const sizes = pattern.sizes || [];
   const size = sizes.find((s) => s.id === sizeId);
-  const count = sizes.filter((s) => s.pos != null).length;
+  const fromPdf = sizes.filter((s) => s.pos != null).sort((a, b) => a.pos - b.pos);
+  const count = fromPdf.length;
+  // Size names as printed in the PDF (needed for "Only sizes …" lines, even if renamed here).
+  const names = (pattern.pdf_size_names && pattern.pdf_size_names.length === count)
+    ? pattern.pdf_size_names : fromPdf.map((s) => s.name);
   return buildGuide(pattern.source_groups || [], {
     name: pattern.name, sizeIndex: size && size.pos != null ? size.pos : 0, sizeCount: count || 1,
+    sizeNames: count > 1 ? names : null, shape: pattern.size_shape || null,
   });
 }
 
-export async function saveGuide(pattern, sizeId, tree, status = 'draft') {
+/**
+ * What a rebuild of this size would produce, before anything is saved: the new tree and the
+ * counts (measured rows, tallies) of projects following it that would have no matching step.
+ */
+export async function planRebuild(pattern, sizeId) {
+  const id = guideId(pattern.id, sizeId);
+  const old = await db.get('guides', id);
+  const tree = guideFromPdf(pattern, sizeId);
+  const progress = (await db.getAll('guide_progress')).filter((p) => p.guide_id === id && !p.deleted);
+  const { unattachedBy } = await import('../patterns/guide-math.js');
+  const lost = old && old.tree ? unattachedBy(old.tree, tree, progress) : { measured: 0, tallies: 0, steps: 0 };
+  return { tree, lost };
+}
+
+/**
+ * Read a size's guide again from the PDF text with the current reader (replaces hand edits).
+ * `tree` may be the one planRebuild() showed. Projects following it keep their place, and
+ * measured rows / tallies move only to a reliably matching step; the rest is kept aside on the
+ * progress record (`unattached`) and not counted.
+ */
+export async function rebuildGuide(pattern, sizeId, tree = null) {
+  const id = guideId(pattern.id, sizeId);
+  const old = await db.get('guides', id);
+  tree = tree || guideFromPdf(pattern, sizeId);
+  if (!(tree.pieces || []).length) return null;
+  const g = await saveGuide(pattern, sizeId, tree, 'ready', { reader: GUIDE_READER_VERSION });
+  const progress = (await db.getAll('guide_progress')).filter((p) => p.guide_id === id);
+  const { carryProgress } = await import('../patterns/guide-math.js');
+  for (const p of progress) {
+    if (old && old.tree) {
+      const r = carryProgress(old.tree, tree, p);
+      p.cursor = r.cursor;
+      p.measure = r.measure;
+      p.tally = r.tally;
+      if (Object.keys(r.unattached.measure).length || Object.keys(r.unattached.tally).length) p.unattached = r.unattached;
+      else delete p.unattached;
+    } else p.cursor = clamp(tree, p.cursor);
+    await db.put('guide_progress', p);
+  }
+  return g;
+}
+
+/**
+ * Save a guide. `reader` is the PDF guide reader version that generated `tree`: pass it when
+ * the tree was just read from the PDF (or copied from a guide that has one), null when it was
+ * not read from the PDF. Leave it out for ordinary edits: the guide keeps its stamp (or lack of one).
+ */
+export async function saveGuide(pattern, sizeId, tree, status = 'draft', opts = {}) {
   const id = guideId(pattern.id, sizeId);
   const old = await db.get('guides', id);
   const g = { ...(old || {}), id, pattern_id: pattern.id, size_id: sizeId || null, status, tree, total_rows: totalRows(tree), deleted: false };
+  if ('reader' in opts) {
+    if (opts.reader == null) delete g.reader; else g.reader = opts.reader;
+  }
   return db.put('guides', g);
 }
 
@@ -182,7 +237,7 @@ export async function autoGuides(pattern, onlySizeId) {
     let tree;
     try { tree = guideFromPdf(pattern, sizeId); } catch (e) { console.warn('auto guide', e); continue; }
     if (!tree || !(totalRows(tree) > 0)) continue;
-    await saveGuide(pattern, sizeId, tree, 'ready');
+    await saveGuide(pattern, sizeId, tree, 'ready', { reader: GUIDE_READER_VERSION });
     made++;
   }
   return made;
@@ -233,7 +288,7 @@ export async function duplicatePattern(id) {
   const cov = p.cover_file_id ? await db.get('files', p.cover_file_id) : null;
   if (cov && cov.blob) await setPatternCover(copy, cov.blob);
   await savePattern(copy);
-  for (const g of await guidesOf(id)) if (!g.deleted) await saveGuide(copy, g.size_id, g.tree, g.status);
+  for (const g of await guidesOf(id)) if (!g.deleted) await saveGuide(copy, g.size_id, g.tree, g.status, { reader: g.reader ?? null });
   return copy;
 }
 

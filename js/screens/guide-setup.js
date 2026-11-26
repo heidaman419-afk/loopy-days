@@ -7,6 +7,7 @@ import { icons } from '../ui/icons.js';
 import { esc } from '../ui/dom.js';
 import { toast } from '../ui/overlay.js';
 import { getPattern, guidesOf, guideId, guideFromPdf, saveGuide } from '../data/patterns.js';
+import { GUIDE_READER_VERSION } from '../patterns/parse-guide.js';
 import { totalRows } from '../patterns/guide-math.js';
 
 export const fullscreen = true;
@@ -87,16 +88,19 @@ export async function mount(root, params) {
       </footer>`;
     root.querySelector('.setup-actions').addEventListener('click', async (e) => {
       let tree = null;
+      let reader = null;                    // only a tree read from the PDF gets the reader stamp
       if (e.target.closest('[data-read]')) {
         tree = guideFromPdf(pattern, sizeId);
+        reader = GUIDE_READER_VERSION;
         if (!totalRows(tree) && !(tree.pieces || []).length) { toast('No steps could be read from this PDF. Start fresh instead.'); return; }
       } else if (e.target.closest('[data-copy]')) {
         const src = guides.find((g) => g.id === e.target.closest('[data-copy]').dataset.copy);
         tree = JSON.parse(JSON.stringify(src.tree));
+        reader = src.reader ?? null;        // a copy keeps the source guide's stamp (or lack of one)
       } else if (e.target.closest('[data-fresh]')) {
         tree = { pieces: [{ id: `p${Date.now().toString(36)}`, name: pattern.name || 'Piece', sections: [{ id: `s${Date.now().toString(36)}`, name: 'Section 1', blocks: [] }] }] };
       } else return;
-      const g = await saveGuide(pattern, sizeId, tree, 'draft');
+      const g = await saveGuide(pattern, sizeId, tree, 'draft', { reader });
       location.hash = `#/guide-edit/${g.id}${projectId ? `/${projectId}` : ''}`;
     });
   }

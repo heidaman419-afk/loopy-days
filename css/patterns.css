@@ -212,7 +212,7 @@ button.knit-bar__go { cursor: pointer; font: inherit; }
 .pill-btn small { font-size: 11px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ged-head__title { font-family: var(--font-display); font-weight: 600; font-size: 26px; }
 .ged-head__size { display: inline-block; margin-top: 6px; padding: 4px 14px; border-radius: 99px; background: var(--dark-cocoa); color: var(--cloud-cream); font-weight: 800; font-size: 13px; }
-.ged { padding: 14px calc(14px + var(--safe-right)) calc(110px + var(--safe-bottom)) calc(14px + var(--safe-left)); display: grid; gap: 8px; }
+.ged { padding: 14px calc(14px + var(--safe-right)) calc(170px + var(--safe-bottom)) calc(14px + var(--safe-left)); display: grid; gap: 8px; }
 .ged-counts { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
 .count-chip { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 99px; font-weight: 800; font-size: 13px; background: var(--surface-soft); color: var(--text); }
 .count-chip--blue { background: var(--powder-blue); color: var(--dark-cocoa); }
@@ -245,7 +245,9 @@ button.knit-bar__go { cursor: pointer; font: inherit; }
 .add-dash--piece { margin: 10px 0 0; min-height: 56px; }
 .ged-sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .ged-foot { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; padding: 12px 16px calc(var(--safe-bottom) + 10px); background: var(--bg); border-top: 1.5px solid var(--line); }
-.ged-foot .btn--butter { flex: 1; }
+.ged-foot { flex-wrap: wrap; }
+.ged-foot .btn--secondary { flex: 1 1 0; min-height: 46px; padding-top: 8px; padding-bottom: 8px; white-space: nowrap; }
+.ged-foot .btn--butter { flex: 1 1 100%; }
 .block-form { display: grid; gap: 14px; }
 .row-edit-list { display: grid; gap: 10px; margin-bottom: 8px; }
 .row-edit { display: grid; gap: 6px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
@@ -329,9 +331,9 @@ button.knit-bar__go { cursor: pointer; font: inherit; }
 .fg-tile { display: grid; justify-items: center; gap: 2px; padding: 12px 10px 14px; border-radius: 22px; border: 2px solid var(--dark-cocoa); color: var(--dark-cocoa); min-width: 0; }
 .fg-tile--row { background: var(--powder-pink); }
 .fg-tile--rep { background: var(--powder-blue); }
-.fg-tile__lab { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; max-width: 100%; }
+.fg-tile__lab { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; max-width: 100%; min-width: 0; overflow: hidden; }
 .fg-tile__lab .ico { width: 18px; height: 18px; flex: none; }
-.fg-tile__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-tile__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .fg-tile .side { padding: 2px 8px; border-radius: 99px; background: var(--white); letter-spacing: 0; font-size: 12px; }
 .fg-tile strong { font-family: var(--font-display); font-weight: 600; font-size: 54px; line-height: 1; font-variant-numeric: tabular-nums; }
 .fg-card { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 22px 18px; border-radius: 24px; border: 2px solid var(--outline); background: var(--surface); box-shadow: var(--shadow); min-height: 150px; align-content: center; }
@@ -388,6 +390,22 @@ select.input { -webkit-appearance: menulist; appearance: auto; }
 .pdfv__pagewrap:not(.is-drawn) { width: calc(100% - 8px); background: #EBDDD0; }
 .pdfv__pagewrap canvas { display: block; }
 .pdfv__msg { padding: 40px 20px; text-align: center; max-width: 320px; margin: 0 auto; }
+
+/* Measure steps ("work until it measures …") and tallies */
+.measure-target {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px;
+  background: color-mix(in srgb, var(--powder-blue) 55%, var(--surface)); color: var(--text); font-size: 15px;
+}
+.measure-target .ico { width: 18px; height: 18px; }
+.cast__btn--wide { width: 120px; }
+.tally {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; width: 100%;
+  padding: 10px 12px; border-radius: 16px; background: var(--surface-soft); font-weight: 700;
+}
+.tally strong { font-family: var(--font-display); font-size: 22px; }
+/* Yarn options: a label per option, "held together with" between yarns of one option */
+.yarn-card__label { font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--text-soft); }
+.yarn-card__with { font-size: 12px; font-weight: 700; color: var(--text-soft); font-style: italic; }
 
 @media (max-width: 380px) {
   .fg-tile strong { font-size: 46px; }

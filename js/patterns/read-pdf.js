@@ -18,11 +18,18 @@ export async function readPatternPdf(file, onStep = () => {}) {
     onStep('pages', { page: 0, of: doc.numPages });
     const pages = await extractPages(doc, (page, of) => onStep('pages', { page, of }));
     onStep('details');
-    const lines = logicalLines(pages);
-    const meta = parseMeta(lines);
-    // Keep only what the guide builder needs: headings, pages and line texts.
-    const sourceGroups = meta.instructionGroups.map((g) => ({
-      heading: g.heading, page: g.page,
+    // Each part is guarded: an unexpected layout still fills in what could be read.
+    let lines = [];
+    try { lines = logicalLines(pages); } catch (e) { console.warn('lines', e); }
+    let meta;
+    try { meta = parseMeta(lines); } catch (e) {
+      console.warn('details', e);
+      meta = { name: '', designer: '', sizes: [], sizeShape: null, measurements: [], gauge: '', needles: '', tools: [], yarns: [], notions: '', description: '', glossary: [], notes: [], instructionGroups: [] };
+      try { const big = lines.filter((l) => l.page === 1).sort((a, b) => b.fs - a.fs)[0]; if (big) meta.name = big.text; } catch { /* nothing */ }
+    }
+    // Keep only what the guide builder needs: headings (+ piece/section level), pages and line texts.
+    const sourceGroups = (meta.instructionGroups || []).map((g) => ({
+      heading: g.heading, level: g.level || 'section', page: g.page,
       lines: g.lines.map((l) => ({ text: l.text, page: l.page })),
     }));
     let cover = null;

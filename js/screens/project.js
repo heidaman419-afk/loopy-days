@@ -12,9 +12,9 @@ import { listPhotos, addPhoto, thumbUrl, fullUrl, deletePhoto } from '../data/ph
 import { timeWorked, loadTimerSettings } from '../data/timer.js';
 import { pickPhoto, withPhotoBusy, viewPhoto } from '../ui/photo-picker.js';
 import { getPattern, listPatterns, coverUrl, pdfBlob, progressFor, keptOffline, setKeepOffline } from '../data/patterns.js';
-import { knitTarget, markup, explainAbbrs, KIND_LABEL, blockSummary } from '../patterns/ui.js';
+import { knitTarget, markup, explainAbbrs, KIND_LABEL, blockSummary, pieceLabel } from '../patterns/ui.js';
 import { askSize } from '../patterns/start-project.js';
-import { flatten, clamp, rowsDone, locate, blockProgress, piecePercent } from '../patterns/guide-math.js';
+import { flatten, clamp, rowsDone, locate, blockProgress, piecePercent, measuredRows } from '../patterns/guide-math.js';
 
 export const fullscreen = true;
 
@@ -206,7 +206,7 @@ export async function mount(root, params) {
     const ms = progress.block_ms || {};
     g.innerHTML = guide.tree.pieces.map((piece) => `
       <details class="gpiece" open>
-        <summary class="gpiece__head"><span class="gpiece__tri">${icons.chevronDown}</span><strong>${esc(piece.name)}</strong>
+        <summary class="gpiece__head"><span class="gpiece__tri">${icons.chevronDown}</span><strong>${esc(pieceLabel(piece))}</strong>
           <span class="pct-pill">${piecePercent(guide.tree, c, piece)}%</span></summary>
         ${piece.sections.map((s) => `
           ${piece.sections.length > 1 || s.name !== piece.name ? `<p class="gsec-name">${esc(s.name)}</p>` : ''}
@@ -216,9 +216,9 @@ export async function mount(root, params) {
             return `<button type="button" class="gblock gblock--${st}" data-block="${b.id}">
               <span class="gblock__mark">${st === 'done' ? icons.check : ''}</span>
               <span class="gblock__text"><strong>${esc(b.title || KIND_LABEL[b.kind])}</strong>
-                <span>${bp.of ? `Row ${Math.min(bp.done + (st === 'current' ? 1 : 0), bp.of)} of ${bp.of}` : esc(blockSummary(b))}</span>
+                <span>${b.kind === 'measure' ? `Measure · ${esc(blockSummary(b))}` : bp.of ? `Row ${Math.min(bp.done + (st === 'current' ? 1 : 0), bp.of)} of ${bp.of}` : esc(blockSummary(b))}</span>
                 ${ms[b.id] ? `<span class="gblock__time">Time worked: ${ms[b.id] < 60000 ? '<1m' : esc(shortTime(ms[b.id]))}</span>` : ''}</span>
-              <span class="gblock__state">${st === 'done' ? 'Done' : st === 'current' ? 'In progress' : 'Not started'}</span>
+              <span class="gblock__state">${st === 'done' ? 'Done' : st === 'current' ? 'In progress' : st === 'partial' ? `${bp.passesDone} of ${bp.passes} done` : 'Not started'}</span>
             </button>`;
           }).join('')}`).join('')}
       </details>`).join('');
@@ -226,14 +226,17 @@ export async function mount(root, params) {
 
   function blockSheet(id) {
     const flat = flatten(guide.tree);
-    const f = flat.find((x) => x.block.id === id);
+    // For a piece worked more than once, the pass the knitter is on (or the first one).
+    const here = flat.find((x) => x.block.id === progress.cursor.block_id && x.pass === (progress.cursor.pass || 0));
+    const f = flat.find((x) => x.block.id === id && here && x.piece === here.piece && x.pass === here.pass) || flat.find((x) => x.block.id === id);
     if (!f) return;
     const b = f.block;
     const sheet = openSheet({
       title: b.title || KIND_LABEL[b.kind],
       className: 'sheet--tall',
       body: `<div class="bprev">
-        <p class="bprev__sub">${f.rows ? `Rows ${f.start}–${f.end} of the pattern` : esc(KIND_LABEL[b.kind])}${b.kind === 'repeat' ? ` · ${b.times} times` : ''} · preview</p>
+        <p class="bprev__sub">${f.rows ? `Rows ${f.start}–${f.end} of the pattern` : esc(KIND_LABEL[b.kind])}${b.kind === 'repeat' ? ` · ${b.times} times` : ''}${f.passes > 1 ? ` · ${esc(f.piece.name)} ${f.pass + 1} of ${f.passes}` : ''} · preview</p>
+        ${b.kind === 'measure' && b.target ? `<p class="measure-target">${icons.ruler}<span>Until it measures <strong>${esc(b.target)}</strong></span></p>` : ''}
         ${(b.rows || []).length ? `<ol class="bprev__rows">${b.rows.map((r) => `<li><strong>Row ${r.n}${r.side ? ` (${r.side})` : ''}</strong><span>${markup(r.text, pattern.glossary)}</span></li>`).join('')}</ol>`
           : `<p class="fg-text fg-text--small">${markup(b.text || '', pattern.glossary)}</p>`}
         ${b.check ? `<p class="info-note">${icons.info}<span>Stitch check: ${esc(b.check)}</span></p>` : ''}
@@ -248,11 +251,12 @@ export async function mount(root, params) {
       const reset = e.target.closest('[data-reset-block]');
       if (!go && !reset) return;
       if (reset && !(await confirmDialog({ title: 'Reset progress?', message: `Your place goes back to the start of “${b.title || KIND_LABEL[b.kind]}”.`, ok: 'Reset' }))) return;
-      progress.cursor = clamp(guide.tree, { block_id: b.id, rep: 0, row: 0, cast: 0, done: false });
+      progress.cursor = clamp(guide.tree, { block_id: b.id, pass: f.pass, rep: 0, row: 0, cast: 0, done: false });
       progress.completed_at = null;
       const entries = [['guide_progress', progress]];
       if (main) {
-        const want = rowsDone(guide.tree, progress.cursor);
+        const measured = measuredRows(guide.tree, progress.measure);
+        const want = rowsDone(guide.tree, progress.cursor) + measured;
         if (main.value !== want) { main.value = want; entries.push(['counters', main]); }
       }
       await db.putMany(entries);

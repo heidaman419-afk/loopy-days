@@ -10,7 +10,7 @@ import {
   coverUrl, pdfBlob, deletePattern, CATEGORIES, DIFFICULTIES, WEIGHTS, categoryLabel, guessCategory,
 } from '../data/patterns.js';
 import { CRAFTS } from '../data/projects.js';
-import { categoryIcon, yarnTitle, yarnAmount } from '../patterns/ui.js';
+import { categoryIcon, yarnTitle, yarnAmount, yarnListHTML } from '../patterns/ui.js';
 import { pickPhoto } from '../ui/photo-picker.js';
 import { shrinkPhoto } from '../data/photos.js';
 import { startProjectFrom } from '../patterns/start-project.js';
@@ -110,8 +110,7 @@ export async function mount(root, params, editing = false) {
         <div class="field"><span class="field__label">Yarn</span>${tag('yarns')}
           <button type="button" class="yarn-card" data-yarns>
             <span class="yarn-card__head">${icons.yarn}<strong>Yarn requirements</strong>${icons.chevronRight}</span>
-            ${(v.yarns || []).map((y, i) => `${i ? '<span class="or-line"><span>or</span></span>' : ''}
-              <span class="yarn-card__item"><strong>${esc(yarnTitle(y))}</strong><span>${esc(yarnAmount(y))}</span></span>`).join('') || '<span class="yarn-card__empty">Tap to add the yarn this pattern needs.</span>'}
+            ${yarnListHTML(v.yarns || []) || '<span class="yarn-card__empty">Tap to add the yarn this pattern needs.</span>'}
           </button></div>
 
         <div class="field"><span class="field__label">Tools and notions</span>${tag('tools')}
@@ -179,6 +178,8 @@ export async function mount(root, params, editing = false) {
       set('description', m.description);
       set('gauge', m.gauge);
       if (m.sizes.length) set('sizes', m.sizes.map((name, pos) => ({ id: sid(), name, pos })));
+      v.size_shape = m.sizeShape || null;
+      v.pdf_size_names = m.sizes.slice();
       if (m.yarns.length) set('yarns', m.yarns.map((y) => ({ ...y, id: sid() })));
       if (m.tools.length) set('tools', m.tools);
       const cat = guessCategory(`${m.name} ${m.description}`);
@@ -236,7 +237,7 @@ export async function mount(root, params, editing = false) {
     const sheet = openSheet({ title: 'Yarn requirements', body, className: 'sheet--tall' });
     const paint = () => {
       body.innerHTML = `${list.map((y, i) => `
-        ${i ? '<p class="or-line"><span>or</span></p>' : ''}
+        ${i ? ((y.alt != null && list[i - 1].alt === y.alt) ? '<p class="yarn-card__with">held together with</p>' : '<p class="or-line"><span>or</span></p>') : ''}
         <fieldset class="yarn-edit" data-i="${i}">
           <div class="pform__two">
             <label class="field"><span class="field__label">Yarn name</span><input class="input" data-k="name" value="${esc(y.name || '')}" placeholder="e.g. Soft Merino"></label>
@@ -254,6 +255,9 @@ export async function mount(root, params, editing = false) {
           </div>
           <label class="field"><span class="field__label">Fibre</span><input class="input" data-k="fibre" value="${esc(y.fibre || '')}" placeholder="e.g. wool, alpaca"></label>
           <label class="field"><span class="field__label">Notes</span><input class="input" data-k="notes" value="${esc(y.notes || '')}" placeholder="e.g. 50 g = 150 m"></label>
+          ${i ? `<label class="settings__row settings__row--box"><span><strong>Held together with the yarn above</strong>
+            <span class="settings__p">Both strands are knitted as one (not a choice between them).</span></span>
+            <span class="switch"><input type="checkbox" data-held ${y.alt != null && list[i - 1].alt === y.alt ? 'checked' : ''}><span class="switch__track"><span class="switch__dot"></span></span></span></label>` : ''}
           <button type="button" class="btn btn--danger-soft btn--small" data-del-yarn>${icons.trash}<span>Remove this yarn</span></button>
         </fieldset>`).join('')}
         <button type="button" class="btn btn--secondary btn--block" data-add-yarn>${icons.plusCircle}<span>${list.length ? 'Add another yarn (or)' : 'Add a yarn'}</span></button>
@@ -267,13 +271,24 @@ export async function mount(root, params, editing = false) {
       y[k] = /^length_/.test(k) ? (parseFloat(e.target.value) || null) : e.target.value;
       if (k === 'grams_text') y.grams = (e.target.value.match(/\d+(?:[.,]\d+)?/g) || []).map((n) => parseFloat(n.replace(',', '.')));
     });
+    body.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-held]')) return;
+      const i = +e.target.closest('[data-i]').dataset.i;
+      list.forEach((x, j) => { if (x.alt == null) x.alt = j; });
+      list[i].alt = e.target.checked ? list[i - 1].alt : list.reduce((n, x) => Math.max(n, x.alt), 0) + 1;
+      paint();
+    });
     body.addEventListener('click', (e) => {
       const fs = e.target.closest('[data-i]');
       const y = fs ? list[+fs.dataset.i] : null;
       if (e.target.closest('[data-weight]')) { y.weight = e.target.closest('[data-weight]').dataset.weight; paint(); }
       if (e.target.closest('[data-unit]')) { y.length_unit = e.target.closest('[data-unit]').dataset.unit; paint(); }
       if (e.target.closest('[data-del-yarn]')) { list.splice(+fs.dataset.i, 1); paint(); }
-      if (e.target.closest('[data-add-yarn]')) { list.push({ id: sid(), name: '', brand: '', weight: '', grams: [], grams_text: '', length_unit: 'm' }); paint(); }
+      if (e.target.closest('[data-add-yarn]')) {
+        const alt = list.reduce((n, x, i) => Math.max(n, x.alt != null ? x.alt : i), -1) + 1;
+        list.push({ id: sid(), name: '', brand: '', weight: '', grams: [], grams_text: '', length_unit: 'm', alt, label: '' });
+        paint();
+      }
     });
     body.addEventListener('submit', (e) => { e.preventDefault(); v.yarns = list; delete v.from_pdf.yarns; sheet.close(); render(); });
   }
