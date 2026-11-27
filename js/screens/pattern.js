@@ -15,6 +15,20 @@ import { startProjectFrom } from '../patterns/start-project.js';
 
 export const fullscreen = true;
 
+/** The pattern's charts: pages found in the PDF and whether each is confirmed (in the guide). */
+function chartsSection(p) {
+  const saved = new Map((p.charts || []).map((c) => [c.page, c]));
+  const pages = [...new Set([...(p.chart_pages || []).map((c) => c.page), ...saved.keys()])].sort((a, b) => a - b);
+  const todo = pages.filter((pg) => (saved.get(pg) || {}).status !== 'confirmed').length;
+  return `<section class="psec">
+    <h2 class="sec-title">${icons.grid}<span>Charts</span></h2>
+    ${pages.length ? `<div class="mini-links">${pages.map((pg) => { const c = saved.get(pg); return `<a href="#/charts/${p.id}/${pg}" class="mini-link"><strong>${esc(c ? c.name : `Chart on page ${pg}`)}</strong><span>${c && c.status === 'confirmed' ? 'In the guide' : 'To confirm'}</span>${icons.chevronRight}</a>`; }).join('')}</div>
+      ${todo ? `<p class="settings__p">${todo} chart${todo > 1 ? 's' : ''} to confirm. Once confirmed, a chart shows up in the guide’s steps.</p>` : ''}`
+      : `<p class="settings__p">${p.chart_pages ? 'No charts were found in the PDF.' : 'Not looked for yet.'}</p>
+      <a class="btn btn--small btn--secondary" href="#/charts/${p.id}">${icons.grid}<span>${p.chart_pages ? 'Look again' : 'Look for charts'}</span></a>`}
+  </section>`;
+}
+
 export async function mount(root, params) {
   let p = await getPattern(params[0]);
   if (!p) { location.hash = '#/patterns'; return; }
@@ -98,6 +112,8 @@ export async function mount(root, params) {
           <p class="settings__p">${guides.filter((g) => g.status === 'ready').length} ${guides.filter((g) => g.status === 'ready').length === 1 ? 'guide' : 'guides'} built · ${Math.max(1, sizes.length)} ${Math.max(1, sizes.length) === 1 ? 'size' : 'sizes'}</p>
           <div class="gsizes">${sizeRows}</div>
         </section>
+
+        ${p.pdf_file_id ? chartsSection(p) : ''}
 
         <section class="psec">
           <h2 class="sec-title">${icons.projects}<span>Projects using it</span></h2>

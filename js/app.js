@@ -16,6 +16,7 @@ import * as guideSetup from './screens/guide-setup.js';
 import * as guideEditor from './screens/guide-editor.js';
 import * as guideFollow from './screens/guide-follow.js';
 import * as pdfViewer from './screens/pdf-viewer.js';
+import * as charts from './screens/charts.js';
 import { placeholder } from './screens/placeholder.js';
 import { startSync } from './sync/engine.js';
 import { catchRecoveryLink } from './sync/auth.js';
@@ -39,6 +40,7 @@ const routes = {
   'pattern-new': patternForm,                                                 // #/pattern-new
   'pattern-edit': { fullscreen: true, mount: patternForm.editMount },         // #/pattern-edit/<id>
   'guide-size': guideSetup,                                                   // #/guide-size/<patternId>[/<sizeId>[/<projectId>]]
+  charts,                                                                     // #/charts/<patternId>[/<page>]
   'guide-edit': guideEditor,                                                  // #/guide-edit/<guideId>[/<projectId>]
   guide: guideFollow,                                                         // #/guide/<projectId>
   pdf: pdfViewer,                                                             // #/pdf/<patternId>[/<page>]

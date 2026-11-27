@@ -148,6 +148,7 @@ export async function mount(root, params, editing = false) {
           <li data-step="open"><span class="steps__mark"></span>Opening your PDF</li>
           <li data-step="pages"><span class="steps__mark"></span><span>Reading the pages</span></li>
           <li data-step="details"><span class="steps__mark"></span>Finding the details</li>
+          <li data-step="charts"><span class="steps__mark"></span><span>Looking for charts</span></li>
           <li data-step="form"><span class="steps__mark"></span>Getting your form ready</li>
         </ol>
         <p class="reading__note">All on your phone. Nothing is uploaded.</p>
@@ -159,7 +160,7 @@ export async function mount(root, params, editing = false) {
       const s = Math.floor((Date.now() - t0) / 1000);
       prog.querySelector('[data-elapsed]').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     }, 500);
-    const order = ['open', 'pages', 'details', 'form'];
+    const order = ['open', 'pages', 'details', 'charts', 'form'];
     const mark = (step, info) => {
       const i = order.indexOf(step);
       prog.querySelectorAll('[data-step]').forEach((li, j) => {
@@ -167,6 +168,7 @@ export async function mount(root, params, editing = false) {
         li.classList.toggle('is-now', j === i);
       });
       if (step === 'pages' && info && info.of) prog.querySelector('[data-step="pages"] span:last-child').textContent = `Reading the pages (${info.page} of ${info.of})`;
+      if (step === 'charts' && info && info.of && info.page) prog.querySelector('[data-step="charts"] span:last-child').textContent = `Looking for charts (page ${info.page} of ${info.of})`;
     };
     try {
       const { readPatternPdf } = await import('../patterns/read-pdf.js');
@@ -190,6 +192,7 @@ export async function mount(root, params, editing = false) {
       v.notes = m.notes;
       v.source_groups = r.sourceGroups;
       v.pdf_pages = r.pages;
+      v.chart_pages = r.chartPages || [];
       pending.pdf = file;
       pending.removePdf = false;
       if (r.cover && (!v.cover_file_id || v.from_pdf.cover)) {
@@ -435,8 +438,10 @@ export async function mount(root, params, editing = false) {
         <h1 class="added__title">Pattern added</h1>
         <p class="added__name">${esc(p.name)}</p>
         <p class="settings__p">It’s in your patterns now${p.pdf_file_id ? ', with its PDF' : ''}. ${p.auto_guides ? `Step-by-step guide${p.auto_guides > 1 ? 's' : ''} ready for ${p.auto_guides > 1 ? `all ${p.auto_guides} sizes` : 'it'}, so you can start right away. ` : ''}Start knitting it, or have a look first.</p>
+        ${(p.chart_pages || []).length ? `<p class="settings__p"><strong>This pattern has ${p.chart_pages.length} chart${p.chart_pages.length > 1 ? 's' : ''}</strong> (page${p.chart_pages.length > 1 ? 's' : ''} ${p.chart_pages.map((c) => c.page).join(', ')}). Confirm ${p.chart_pages.length > 1 ? 'them' : 'it'} and ${p.chart_pages.length > 1 ? 'they show' : 'it shows'} up in the guide’s steps.</p>` : ''}
         <div class="added__actions">
-          <button type="button" class="btn btn--butter btn--block" data-start>${icons.play}<span>Start a project</span></button>
+          ${(p.chart_pages || []).length ? `<a class="btn btn--butter btn--block" href="#/charts/${p.id}">${icons.grid}<span>Confirm the chart${p.chart_pages.length > 1 ? 's' : ''}</span></a>` : ''}
+          <button type="button" class="btn ${(p.chart_pages || []).length ? 'btn--secondary' : 'btn--butter'} btn--block" data-start>${icons.play}<span>Start a project</span></button>
           <a class="btn btn--secondary btn--block" href="#/pattern/${p.id}">View pattern</a>
         </div>
       </main>`;
