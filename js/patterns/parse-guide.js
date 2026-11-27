@@ -12,7 +12,7 @@
 //   bind_off { text, method }   pick_up { stitches, text }   chart { image_file_id, text }
 // Every block: { id, kind, title, note, check, page }
 
-import { pickSize, onlySizes, pickInList } from './sizes.js';
+import { pickSize, onlySizes, pickInList, headingSizes, subShape, defaultShape } from './sizes.js';
 
 const ROW = /^((?:[A-Z][\w-]*\s+){0,3}?)(Row|Rnd|Round)s?\s+(\d+)(?:\s*\(\s*(RS|WS)\s*\))?\s*[:.]\s*([\s\S]*)$/;
 const ROW_RANGE = /^(?:[A-Z][\w-]*\s+){0,3}?(Row|Rnd|Round)s\s+(\d+)\s*(?:-|–|to|and)\s*(\d+)(?:\s*\(\s*(RS|WS)\s*\))?\s*[:.]\s*(.*)$/;
@@ -27,6 +27,8 @@ const FINISH = /^(?:weave in|block\b|blocking|finishing|sew\b|graft\b)/i;
 const CHECK = /there (?:are|is) (?:now )?(?:a total of )?(\d+)\s*(sts?|stitches)([^.]*)\./i;
 const METHOD = /(long[- ]tail|cable|backwards?[- ]loop|provisional|german twisted|knitted|tubular|crochet)\s*(?:cast[- ]on|method)?/i;
 const SAME_WAY = /\bwork (?:the other|a second|the second) (\w+) the same way\b|\bmake (?:a |the )?(?:second|other) (\w+) the same way\b/i;
+// "Make another sock." / "Knit one more mitten.": only when the word names the piece or pattern.
+const ONE_MORE = /^(?:knit|make|work) (?:one more|another|a second) (\w+)\.?$/i;
 const NOTE = /^(?:note|tip|important|hint)\b[^.!:]{0,40}[!:]|^note about\b|^distribution of\b|\bare now complete\b/i;
 const MEASURE = /\buntil\b[^.]*?\bmeasure(?:s|d)\b/i;
 const TARGET = /until (?:the )?\w+(?: measured(?: [^,.]*?)? is| measures)\s+((?:approx\.?\s*)?[\d.,½¼¾]+\s*(?:cm|mm|in(?:ches)?|["“”″])?(?:\s*\/\s*[\d.,½¼¾]+\s*(?:cm|mm|in(?:ches)?|["“”″]))?)/i;
@@ -34,7 +36,8 @@ const AT_SAME_TIME = /while at the same time working (?:an? )?(\w+) (?:rnd|round
 const ONE_ROUND = /\b(?:work|knit|purl) (?:one|1) (?:\w+ )?(?:rnd|round|row)s?\b/i;
 // "Place the sleeve sts on waste yarn …": the step that splits body and sleeves.
 const SEPARATE = /^(?:now,?\s+|next,?\s+|then,?\s+)?(?:place|put|transfer|slip|move)\b[^.]*\bsleeves?\b[^.]*\b(?:waste yarn|scrap yarn|holders?|on hold)\b/i;
-const INSTR = /^\s*\*?\s*(?:(?:k|p)(?:\s*\d+|\s+to\b|\s+all\b|2tog|\b)|sl\b|ssk|yo\b|m1)/i;
+// (Never a glossary entry such as "k = knit".)
+const INSTR = /^\s*\*?\s*(?:(?:k|p)(?:\s*\d+|\s+to\b|\s+all\b|2tog|\b)|sl\b|ssk|yo\b|m1)(?!\w*\s*=\s)/i;
 const GENERIC = /^(?:now\s+|next,?\s+)?(?:work|continue)(?:\s+as follows|\s+like this)?\s*:?\s*$/i;
 const ONE_ROUND_INTRO = /^(?:and\s+)?work (?:one|1) (?:\w+ )?(?:rnd|round|row)s?(?: as follows)?:?$/i;
 
@@ -56,6 +59,33 @@ export function nameFromIntro(t) {
   m = /^(?:now\s+)?work\s+(.{3,30}?)(?:\s+as follows|\s+every|\s+along|:|$)/i.exec(t);
   if (m) return cap(m[1]);
   return cap(shortTitle(t.replace(/\s*(?:as follows)?\s*[:.]\s*$/i, '')));
+}
+
+// Leftover prose: a paragraph that starts with a knitting action starts a step; "Continue …",
+// remarks, and whatever follows a lead-in ending in ':' belong to the step before.
+const ACTION = /^(?:knit|purl|work|slip|sl|cast|bind|place|put|pick|divide|join|decrease|increase|dec|inc|turn|change|start|begin|cut|break|fold|sew|graft|transfer|move|set|mark|k\d|p\d)\b/i;
+const GOES_ON = /^(?:continue|repeat|rep|then|and)\b/i;
+
+/** Group leftover paragraphs into steps: [[para, …], …]. */
+function proseSteps(paras) {
+  const steps = [];
+  for (const p of paras) {
+    const cur = steps[steps.length - 1];
+    const prev = cur && cur[cur.length - 1];
+    // A lead-in to a chart ("… according to the chart:") ends its step: the chart comes next.
+    const toChart = prev && /\b(?:charts?|diagrams?)\s*:\s*$/i.test(prev);
+    if (cur && !toChart && (/:\s*$/.test(prev) || GOES_ON.test(p) || !ACTION.test(p))) cur.push(p);
+    else steps.push([p]);
+  }
+  return steps;
+}
+
+/** "… until there are 8 sts left" / "until you have 50 stitches left": the count to check. */
+function proseCheck(t) {
+  const m = /\buntil (?:there (?:are|is)|you have) (\d+)\s*(?:sts?|stitches)\s+(left|remain\w*)/gi;
+  let last = null;
+  for (const x of String(t).matchAll(m)) last = x;
+  return last ? `${last[1]} sts ${last[2].toLowerCase()}` : '';
 }
 
 function stitchCheck(text) {
@@ -186,10 +216,13 @@ function scopeRepeatChecks(b) {
 export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount = 1, sizeNames = null, shape = null } = {}) {
   const sz = (t) => (sizeCount > 1 ? pickSize(t, sizeIndex, sizeCount, shape) : t);
   const myName = sizeNames && sizeNames[sizeIndex];
+  let scoped = null;               // the group's heading is for some sizes only: { j, k, shape }
+  /** Numbers written for the scoped sizes only ("4 (8) 18 (24)" under "(Sizes I-L only)"). */
+  const szScoped = (t) => (scoped && scoped.k > 1 ? pickSize(t, scoped.j, scoped.k, scoped.shape) : t);
   /** Size-specific text: drop "Only sizes …" paragraphs for other sizes, resolve the rest. */
   const prep = (raw) => {
     const only = sizeNames ? onlySizes(raw, sizeNames) : null;
-    if (!only) return { t: sz(raw), raw };
+    if (!only) return { t: szScoped(sz(raw)), raw };
     const j = only.sizes.indexOf(myName);
     if (j < 0) return null;
     const body = sz(pickInList(only.body, j, only.sizes.length));
@@ -215,7 +248,18 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
   };
   const addNote = (b, t) => { b.note = [b.note, t].filter(Boolean).join(' '); };
 
-  for (const g of groups) {
+  for (const g0 of groups) {
+    // "Set up (Sizes I-L only)": skipped for other sizes; "(all sizes)" is just dropped from the name.
+    const hs = sizeNames && g0.heading ? headingSizes(g0.heading, sizeNames) : null;
+    scoped = null;
+    if (hs && hs.sizes) {
+      if (!hs.sizes.includes(myName)) continue;
+      const idx = hs.sizes.map((x) => sizeNames.indexOf(x));
+      const k = idx.length;
+      const contiguous = idx.every((x, i) => i === 0 || x === idx[i - 1] + 1);
+      scoped = { j: hs.sizes.indexOf(myName), k, shape: (contiguous && subShape(shape, idx[0], idx[k - 1])) || defaultShape(k) };
+    }
+    const g = hs ? { ...g0, heading: hs.name } : g0;
     if (g.level === 'piece') {
       piece = { id: bid('p'), name: g.heading || name || 'Pattern', times: 1, sections: [] };
       pieces.push(piece);
@@ -227,6 +271,7 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
     const finishingPiece = /finish/i.test(piece.name);
     let intro = '';
     let pending = [];               // prose waiting for the next step (becomes its note)
+    let introAt = 0;                // where the open lead-in sits among the pending prose
     let group = null;               // open rows block
     let lastRowsBlock = null;
     let tentativeCheck = false;     // group.check came from a line that may be followed by more rows
@@ -349,6 +394,14 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
         continue;
       }
 
+      if ((m = ONE_MORE.exec(t))) {
+        const stem = m[1].toLowerCase().replace(/e?s$/, '');
+        if (stem.length >= 3 && `${piece.name} ${name}`.toLowerCase().split(/[^a-zà-ÿ]+/).some((w) => w.replace(/e?s$/, '') === stem)) {
+          closeGroup();
+          piece.times = Math.max(2, piece.times || 1);
+          continue;
+        }
+      }
       if ((m = SAME_WAY.exec(t))) {
         closeGroup();
         piece.times = Math.max(2, piece.times || 1);
@@ -440,8 +493,14 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
         continue;
       }
 
-      // A sentence that leads into rows names the next block.
-      if (/:\s*$|as follows|follows:/i.test(t)) { intro = t; continue; }
+      // A sentence that leads into rows names the next block. One that led into nothing
+      // (another lead-in follows) is kept as prose in its place.
+      if (/:\s*$|as follows|follows:/i.test(t)) {
+        if (intro) pending.splice(Math.min(introAt, pending.length), 0, intro);
+        intro = t;
+        introAt = pending.length;
+        continue;
+      }
 
       // A short cheer ("Enjoy your new knit!") is a note, not a step.
       if (t.length <= 60 && /!\s*$/.test(t)) {
@@ -453,10 +512,21 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
       if (finishingPiece) { push({ id: bid('b'), kind: 'text', title: shortTitle(t), text: t, note: takePending(), check: '', page: l.page }); continue; }
       pending.push(t);                                       // context for the next step
     }
-    // Nothing is lost: leftover prose becomes a text step at the end of its part.
+    // A lead-in that led into nothing stays with the leftover prose, in its place.
+    if (intro && pending.length) { pending.splice(Math.min(introAt, pending.length), 0, intro); intro = ''; }
+    // Nothing is lost: leftover prose becomes text steps at the end of its part.
     if (pending.length) {
-      const t = pending.join('\n');
-      push({ id: bid('b'), kind: 'text', title: shortTitle(pending[0]), text: t, note: '', check: '', page: g.page });
+      const steps = proseSteps(pending);
+      if (steps.length > 1) {
+        // Written-out instructions (no row labels): one step per instruction paragraph.
+        for (const ps of steps) {
+          const t = ps.join('\n');
+          push({ id: bid('b'), kind: 'text', title: nameFromIntro(ps[0]) || shortTitle(ps[0]), text: t, note: '', check: proseCheck(t), page: g.page });
+        }
+      } else {
+        const t = pending.join('\n');
+        push({ id: bid('b'), kind: 'text', title: shortTitle(pending[0]), text: t, note: '', check: '', page: g.page });
+      }
     }
     if (intro && !section.blocks.length) push({ id: bid('b'), kind: 'text', title: shortTitle(intro), text: intro, note: '', check: '', page: g.page });
     if (!section.blocks.length) piece.sections.splice(piece.sections.indexOf(section), 1);
