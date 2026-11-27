@@ -108,7 +108,9 @@ export async function mount(root, params) {
     const U = upright(ch), rows = rowsOfChart(ch), row = rows[n - 1];
     if (!row) return '';
     const keys = new Map(ch.keys.map((k) => [k.id, k]));
-    const from = Math.min(U.rows, n + 2), to = Math.max(1, n - 2);          // two rows above and below
+    // The whole chart when it fits (rows done shaded, this row outlined); tall charts: 15 rows around it.
+    const whole = U.rows <= 60;
+    const from = whole ? U.rows : Math.min(U.rows, n + 7), to = whole ? 1 : Math.max(1, n - 7);
     const avail = Math.max(220, (root.querySelector('.fg') || root).clientWidth - 70);
     const cw = Math.max(10, Math.min(22, Math.floor(avail / U.cols)));     // wide charts scroll sideways
     let cells = '';
@@ -116,9 +118,9 @@ export async function mount(root, params) {
       const vr = U.rows - rn;
       for (let vc = 0; vc < U.cols; vc++) {
         const k = keys.get(U.at(vr, vc)) || {};
-        cells += `<span class="fg-chart__cell ${k.outside ? 'is-outside' : ''} ${rn === n ? 'is-now' : 'is-dim'}" style="${k.outside || !k.img ? '' : `background-image:url(${k.img})`}"></span>`;
+        cells += `<span class="fg-chart__cell ${k.outside ? 'is-outside' : ''} ${rn === n ? 'is-now' : rn < n ? 'is-done' : ''}" style="${k.outside || !k.img ? '' : `background-image:url(${k.img})`}"></span>`;
       }
-      cells += `<span class="fg-chart__num ${rn === n ? 'fg-chart__now' : ''}">${rn}</span>`;
+      cells += `<span class="fg-chart__num ${rn === n ? 'fg-chart__now' : ''}" ${rn === n ? 'data-now-row' : ''}>${rn}</span>`;
     }
     const prevMakes = n > 1 ? rows[n - 2].makes : row.uses;
     const delta = Math.round((row.makes - prevMakes) * 10) / 10;
@@ -201,9 +203,11 @@ export async function mount(root, params) {
       card.innerHTML = `<p class="fg-text fg-text--small">${markup(b.text || '', pattern.glossary)}</p>`;
     }
     const strip = card.querySelector('.fg-chart__strip');
-    if (strip) {                                           // start where the row is read from
+    if (strip) {                                           // start where the row is read from, this row in view
       const r0 = L.rowObj;
       strip.scrollLeft = r0 && r0.side === 'WS' ? 0 : strip.scrollWidth;
+      const now = strip.querySelector('[data-now-row]');
+      if (now) strip.scrollTop = Math.max(0, now.offsetTop - strip.clientHeight / 2);
     }
     const ov = $('[data-overview]');
     ov.hidden = !isRows;

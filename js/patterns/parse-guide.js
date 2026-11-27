@@ -13,6 +13,7 @@
 // Every block: { id, kind, title, note, check, page }
 
 import { pickSize, onlySizes, pickInList, headingSizes, subShape, defaultShape } from './sizes.js';
+import { refineSteps } from './refine-steps.js';
 
 const ROW = /^((?:[A-Z][\w-]*\s+){0,3}?)(Row|Rnd|Round)s?\s+(\d+)(?:\s*\(\s*(RS|WS)\s*\))?\s*[:.]\s*([\s\S]*)$/;
 const ROW_RANGE = /^(?:[A-Z][\w-]*\s+){0,3}?(Row|Rnd|Round)s\s+(\d+)\s*(?:-|–|to|and)\s*(\d+)(?:\s*\(\s*(RS|WS)\s*\))?\s*[:.]\s*(.*)$/;
@@ -531,6 +532,8 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
     if (intro && !section.blocks.length) push({ id: bid('b'), kind: 'text', title: shortTitle(intro), text: intro, note: '', check: '', page: g.page });
     if (!section.blocks.length) piece.sections.splice(piece.sections.indexOf(section), 1);
   }
+  // Written-out instructions into followable steps (repeats, short rows, heel/gusset sections).
+  refineSteps(pieces, { mk: bid, title: (t) => cap(shortTitle(t)), check: proseCheck });
   for (const p of pieces) for (const s of p.sections) for (const b of s.blocks) { delete b.family; scopeRepeatChecks(b); }
   return { pieces: pieces.filter((p) => p.sections.length) };
 }

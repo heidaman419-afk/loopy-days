@@ -1,7 +1,7 @@
 // Loopy Days service worker: caches every app file so the app opens with no signal.
 // Bump VERSION whenever any file changes; the old cache is removed on activate.
 
-const VERSION = 'loopy-days-v20'; // keep equal to APP_VERSION in js/version.js
+const VERSION = 'loopy-days-v21'; // keep equal to APP_VERSION in js/version.js
 
 const FILES = [
   './',
@@ -64,6 +64,7 @@ const FILES = [
   './js/patterns/chart-legend-text.js',
   './js/patterns/chart-read.js',
   './js/patterns/parse-guide.js',
+  './js/patterns/refine-steps.js',
   './js/patterns/parse-lines.js',
   './js/patterns/parse-meta.js',
   './js/patterns/pdf.js',

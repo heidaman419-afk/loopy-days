@@ -128,10 +128,11 @@ export function attachCharts(tree, charts, sizeId = null, opts = {}) {
  * followed by N different charts in a row (right and left slipper) becomes N pieces, each named after
  * its chart and holding only that chart (other steps, and other charts, are in every copy). The first
  * copy keeps the step ids; later copies get "~2", "~3" … so a knitter's place stays put on Rebuild.
+ * A closing "Finishing" section becomes one piece after the copies (it is done once, not per copy).
  */
 export function splitPerPass(tree) {
   const out = [];
-  for (const piece of tree.pieces || []) {
+  for (let piece of tree.pieces || []) {
     const n = Math.max(1, parseInt(piece.times, 10) || 1);
     let run = null;
     if (n > 1) {
@@ -144,6 +145,10 @@ export function splitPerPass(tree) {
       }
     }
     if (!run) { out.push(piece); continue; }
+    // A closing "Finishing" section is done once, after all the copies (its own piece).
+    const last = piece.sections[piece.sections.length - 1];
+    const finishing = piece.sections.length > 1 && last && /finish/i.test(last.name || '') && !last.blocks.some((b) => b.chart_id) ? last : null;
+    if (finishing) piece = { ...piece, sections: piece.sections.slice(0, -1) };
     const order = [...run];
     order.forEach((cid, k) => {
       const suffix = k ? `~${k + 1}` : '';
@@ -160,6 +165,7 @@ export function splitPerPass(tree) {
       copy.per_pass_of = piece.id;
       out.push(copy);
     });
+    if (finishing) out.push({ id: `${piece.id}-fin`, name: finishing.name || 'Finishing', times: 1, sections: [finishing] });
   }
   return { ...tree, pieces: out };
 }

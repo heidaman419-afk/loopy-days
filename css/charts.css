@@ -64,13 +64,14 @@
 
 /* follow mode: the chart strip */
 .fg-chart { display: grid; gap: 8px; margin-bottom: 10px; }
-.fg-chart__strip { overflow-x: auto; }
+.fg-chart__strip { overflow: auto; max-height: 46vh; position: relative; }
 .fg-chart__grid { display: grid; width: max-content; margin: 0 auto; }
 .fg-chart__cell { border: 1px solid rgba(0, 0, 0, .16); background-size: cover; background-position: center; }
 .fg-chart__cell.is-outside { background: repeating-linear-gradient(45deg, #f4f1ee, #f4f1ee 3px, #e2dbd4 3px, #e2dbd4 5px); }
 .fg-chart__cell.is-now { border-top: 2px solid var(--dark-cocoa); border-bottom: 2px solid var(--dark-cocoa); }
 .fg-chart__row { display: contents; }
 .fg-chart__grid .is-dim { opacity: .45; }
+.fg-chart__cell.is-done { box-shadow: inset 0 0 0 99px rgba(168, 181, 162, .45); }   /* rows already worked */
 .fg-chart__num { font-size: 11px; color: var(--text-faint); display: flex; align-items: center; justify-content: center; }
 .fg-chart__now { outline: 3px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
 .fg-chart__meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-small); color: var(--text-soft); }
