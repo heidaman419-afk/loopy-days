@@ -36,13 +36,24 @@ function steps(tree) {
   return out;
 }
 
-/** The step a chart most likely belongs after: one that names it, else the first that mentions a chart. */
+/**
+ * The step a chart most likely belongs after. Candidates: steps that name the chart ("Chart A"), else
+ * steps that mention a chart at all. Of those, the nearest one at or before the chart's page (the
+ * instruction to work a chart comes just before or on its page); if none, the first candidate.
+ */
 export function suggestPlace(tree, chart) {
   const all = steps(tree).filter((s) => !s.block.chart_id);
   const name = norm(chart.name);
-  const named = name && name.length > 2 ? all.find((s) => textOf(s.block).includes(name)) : null;
-  const any = named || all.find((s) => /\bchart\b/.test(textOf(s.block)));
-  return any ? placeOf(any.block) : null;
+  let cands = name && name.length > 2 && /\bchart\b/.test(name) ? all.filter((s) => textOf(s.block).includes(name)) : [];
+  if (!cands.length) cands = all.filter((s) => /\bchart\b/.test(textOf(s.block)));
+  if (!cands.length) return null;
+  const pageOf = (st) => +(st.block.page || st.section.page || 0);
+  const before = cands.filter((st) => pageOf(st) && chart.page && pageOf(st) <= chart.page);
+  // Several on that page: a chart on the same page follows the first mention (it is printed right under
+  // its instruction); a chart printed on a later page follows the latest mention before it.
+  const top = before.filter((st) => pageOf(st) === Math.max(...before.map(pageOf)));
+  const best = top.length ? (pageOf(top[0]) === +chart.page ? top[0] : top[top.length - 1]) : cands[0];
+  return placeOf(best.block);
 }
 export const placeOf = (b) => ({ title: b.title || '', text: String(b.text || (b.rows || [])[0]?.text || '').slice(0, 80) });
 
@@ -78,7 +89,7 @@ export function attachCharts(tree, charts, sizeId = null, opts = {}) {
       if (!opts.keepPlaced || !readyIds.has(b.chart_id)) return [];
       present.add(b.chart_id);
       const fresh = chartBlock(ready.find((c) => c.id === b.chart_id), sizeId);
-      return [{ ...fresh, ...(b.note ? { note: b.note } : {}) }];   // updated in place (a note added in the editor is kept)
+      return [{ ...fresh, id: b.id, ...(b.note ? { note: b.note } : {}) }];   // updated in place (its id, and a note added in the editor, kept)
     });
   }
   for (const p of t.pieces || []) p.sections = (p.sections || []).filter((s) => !(s.charts_section && !s.blocks.length));
@@ -109,5 +120,46 @@ export function attachCharts(tree, charts, sizeId = null, opts = {}) {
       if (i >= 0) sec.blocks.splice(i, 0, block); else sec.blocks.push(block);
     }
   }
-  return t;
+  return splitPerPass(t);
+}
+
+/**
+ * One chart per time worked: a piece worked N times (e.g. "make another slipper") whose step is
+ * followed by N different charts in a row (right and left slipper) becomes N pieces, each named after
+ * its chart and holding only that chart (other steps, and other charts, are in every copy). The first
+ * copy keeps the step ids; later copies get "~2", "~3" … so a knitter's place stays put on Rebuild.
+ */
+export function splitPerPass(tree) {
+  const out = [];
+  for (const piece of tree.pieces || []) {
+    const n = Math.max(1, parseInt(piece.times, 10) || 1);
+    let run = null;
+    if (n > 1) {
+      for (const sec of piece.sections || []) {
+        for (let i = 0; i < (sec.blocks || []).length && !run; i++) {
+          const ids = [];
+          for (let j = i; j < sec.blocks.length && sec.blocks[j].chart_id; j++) ids.push(sec.blocks[j].chart_id);
+          if (ids.length === n) run = new Set(ids);
+        }
+      }
+    }
+    if (!run) { out.push(piece); continue; }
+    const order = [...run];
+    order.forEach((cid, k) => {
+      const suffix = k ? `~${k + 1}` : '';
+      const copy = JSON.parse(JSON.stringify(piece));
+      copy.times = 1;
+      copy.id = `${piece.id}${suffix}`;
+      for (const sec of copy.sections) {
+        sec.id = `${sec.id}${suffix}`;
+        sec.blocks = sec.blocks.filter((b) => !(b.chart_id && run.has(b.chart_id) && b.chart_id !== cid))
+          .map((b) => (b.chart_id === cid ? b : { ...b, id: `${b.id}${suffix}` }));   // shared steps (charts too) get their own ids
+      }
+      const chartBlock = copy.sections.flatMap((s) => s.blocks).find((b) => b.chart_id === cid);
+      copy.name = chartBlock && chartBlock.title ? chartBlock.title.charAt(0).toUpperCase() + chartBlock.title.slice(1) : `${piece.name} ${k + 1}`;
+      copy.per_pass_of = piece.id;
+      out.push(copy);
+    });
+  }
+  return { ...tree, pieces: out };
 }

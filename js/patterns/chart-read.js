@@ -153,8 +153,9 @@ export function cellImage(canvas, g, r, c) {
 }
 
 /**
- * A default name: a "Chart …" caption on the page (nearest the chart), else the nearest heading above
- * the chart (text larger than the page's usual size), else the nearest text line above, else "Chart, page N".
+ * A default name: a "Chart …" caption on the page (nearest the chart), else what the lines just above
+ * the chart say it is for ("Heel chart"), else the nearest heading above the chart (text larger than the
+ * page's usual size), else the nearest text line above, else "Chart, page N".
  */
 function chartName(boxes, g, pnum) {
   const cy = (g.ys[0] + g.ys[g.rows]) / 2, cx = (g.xs[0] + g.xs[g.cols]) / 2;
@@ -162,6 +163,10 @@ function chartName(boxes, g, pnum) {
     .sort((a, b) => Math.hypot(a.x0 - cx, a.top - cy) - Math.hypot(b.x0 - cx, b.top - cy))[0];
   if (caption) return caption.s.trim();
   const sizes = boxes.map((b) => b.h).sort((a, b) => a - b), body = sizes[sizes.length >> 1] || 0;
+  // The lines just above the chart usually say what it is for ("… will be the heel. … according to chart").
+  const lead = boxes.filter((b) => b.base <= g.ys[0] + 2 && b.base >= g.ys[0] - body * 6).map((b) => b.s).join(' ');
+  const part = /\b(heel|toe|yoke|sleeves?|body|front|back|foot|cuffs?|crown|thumb|border|edging|hem|collar|hood|pocket)\b/i.exec(lead);
+  if (part) return `${part[1].charAt(0).toUpperCase()}${part[1].slice(1).toLowerCase()} chart`;
   const heading = boxes.length < 6 ? null : boxes.filter((b) => b.base <= g.ys[0] + 2 && b.h > body * 1.1 && b.s.trim().length > 2).sort((a, b) => b.base - a.base)[0];
   const near = heading || boxes.filter((b) => b.base <= g.ys[0] + 2 && b.s.trim().length > 2 && !/copyright|©/i.test(b.s)).sort((a, b) => b.base - a.base)[0];
   return near ? near.s.trim().replace(/[:：]\s*$/, '') : `Chart, page ${pnum}`;
