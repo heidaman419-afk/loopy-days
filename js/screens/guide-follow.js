@@ -10,11 +10,12 @@ import { openSheet, openDialog, toast, confirmDialog } from '../ui/overlay.js';
 import { getProject, markWorked, localDate } from '../data/projects.js';
 import { ProjectCounters } from '../data/counters.js';
 import { SessionTimer, loadTimerSettings } from '../data/timer.js';
-import { getPattern, getGuide, guideId, progressFor } from '../data/patterns.js';
+import { getPattern, getGuide, guideId, progressFor, savePattern } from '../data/patterns.js';
 import { next, prev, clamp, rowsDone, totalRows, locate, flatten, progressPct, checksAt, measuredRows } from '../patterns/guide-math.js';
 import { markup, explainAbbrs, KIND_LABEL } from '../patterns/ui.js';
 import { REPEAT_SCOPE_SINCE } from '../patterns/parse-guide.js';
 import { openTimerSettings } from './timer-settings.js';
+import { chartRows, upright } from '../patterns/chart-rows.js';
 import { openLock } from './lock.js';
 import { pickPhoto, withPhotoBusy } from '../ui/photo-picker.js';
 import { addPhoto } from '../data/photos.js';
@@ -96,6 +97,45 @@ export async function mount(root, params) {
     db.putMany(entries).catch((e) => { console.error(e); toast('Couldn’t save. Is the phone’s storage full?'); }).finally(() => { inFlight--; });
   }
 
+  /* ---------- charts ---------- */
+
+  // A chart step (chart_id) shows the chart around the current row, its counts and its keys.
+  const chartRowCache = new Map();
+  const chartOf = (b) => (b && b.chart_id ? (pattern.charts || []).find((c) => c.id === b.chart_id && c.grid) : null);
+  const rowsOfChart = (ch) => { if (!chartRowCache.has(ch)) chartRowCache.set(ch, chartRows(ch)); return chartRowCache.get(ch); };
+  const sizeKey = project.size_id || 'one';
+  function chartStrip(ch, n) {
+    const U = upright(ch), rows = rowsOfChart(ch), row = rows[n - 1];
+    if (!row) return '';
+    const keys = new Map(ch.keys.map((k) => [k.id, k]));
+    const from = Math.min(U.rows, n + 2), to = Math.max(1, n - 2);          // two rows above and below
+    const avail = Math.max(220, (root.querySelector('.fg') || root).clientWidth - 70);
+    const cw = Math.max(10, Math.min(22, Math.floor(avail / U.cols)));     // wide charts scroll sideways
+    let cells = '';
+    for (let rn = from; rn >= to; rn--) {
+      const vr = U.rows - rn;
+      for (let vc = 0; vc < U.cols; vc++) {
+        const k = keys.get(U.at(vr, vc)) || {};
+        cells += `<span class="fg-chart__cell ${k.outside ? 'is-outside' : ''} ${rn === n ? 'is-now' : 'is-dim'}" style="${k.outside || !k.img ? '' : `background-image:url(${k.img})`}"></span>`;
+      }
+      cells += `<span class="fg-chart__num ${rn === n ? 'fg-chart__now' : ''}">${rn}</span>`;
+    }
+    const prevMakes = n > 1 ? rows[n - 2].makes : row.uses;
+    const delta = Math.round((row.makes - prevMakes) * 10) / 10;
+    const reps = (ch.repeats || {})[sizeKey];
+    const used = [...new Set(row.cells)].map((id) => keys.get(id)).filter(Boolean);
+    return `<div class="fg-chart">
+      <div class="fg-chart__strip"><div class="fg-chart__grid" style="grid-template-columns:repeat(${U.cols}, ${cw}px) 22px;grid-auto-rows:${Math.round(cw * 0.85)}px">${cells}</div></div>
+      <div class="fg-chart__meta">
+        <span>Chart row ${n} of ${U.rows}${row.side ? ` · ${row.side}` : ''} · read ${row.side === 'WS' ? 'left to right →' : '← right to left'}</span>
+        ${delta ? `<span class="fg-badge ${delta < 0 ? 'fg-badge--dec' : ''}">${delta > 0 ? '+' : '−'}${Math.abs(delta)} per repeat</span>` : ''}
+      </div>
+      <div class="fg-chart__meta"><span>${row.makes} st${row.makes === 1 ? '' : 's'} per repeat after this row${reps ? ` × ${reps} = <strong>${Math.round(row.makes * reps)}</strong> sts` : ''}</span>
+        <label class="fg-chart__reps">Repeats: <input class="input input--small" data-chart-reps="${ch.id}" inputmode="numeric" pattern="[0-9]*" value="${reps || ''}" placeholder="?" aria-label="Repeats per row for your size" style="width:64px"></label></div>
+      <div class="fg-chart__keys">${used.map((k) => `<span class="fg-chart__key"><span class="sw" style="${k.img ? `background-image:url(${k.img})` : ''}"></span>${esc(k.name || 'Stitch')}</span>`).join('')}</div>
+    </div>`;
+  }
+
   /* ---------- painting ---------- */
 
   function paint() {
@@ -125,7 +165,8 @@ export async function mount(root, params) {
     if (c.done) {
       card.innerHTML = `<p class="fg-text">${icons.sparkle} You’ve reached the end of the guide.</p>`;
     } else if (isRows) {
-      card.innerHTML = `<p class="fg-text">${markup(r ? r.text : '', pattern.glossary)}</p>${r && r.same_as ? `<span class="fg-hint">Same as row ${r.same_as}</span>` : ''}
+      const ch = chartOf(b);
+      card.innerHTML = `${ch && r && r.chart_row ? chartStrip(ch, r.chart_row) : ''}<p class="fg-text">${markup(r ? r.text : '', pattern.glossary)}</p>${r && r.same_as ? `<span class="fg-hint">Same as row ${r.same_as}</span>` : ''}
         <span class="fg-hint">Row ${L.patternRow} of the pattern</span>`;
     } else if (b.kind === 'cast_on') {
       const target = b.stitches || 0;
@@ -158,6 +199,11 @@ export async function mount(root, params) {
           <button type="button" class="btn btn--text btn--small" data-tally-step="-1">−1</button></div>` : ''}`;
     } else {
       card.innerHTML = `<p class="fg-text fg-text--small">${markup(b.text || '', pattern.glossary)}</p>`;
+    }
+    const strip = card.querySelector('.fg-chart__strip');
+    if (strip) {                                           // start where the row is read from
+      const r0 = L.rowObj;
+      strip.scrollLeft = r0 && r0.side === 'WS' ? 0 : strip.scrollWidth;
     }
     const ov = $('[data-overview]');
     ov.hidden = !isRows;
@@ -387,6 +433,18 @@ export async function mount(root, params) {
     const t = e.target.closest('[data-tally-step]');
     if (t) tallyStep(+t.dataset.tallyStep);
   });
+  root.addEventListener('change', async (e) => {
+    const inp = e.target.closest('[data-chart-reps]');
+    if (!inp) return;
+    const ch = (pattern.charts || []).find((c) => c.id === inp.dataset.chartReps);
+    if (!ch) return;
+    const n = parseInt(inp.value, 10);
+    ch.repeats = { ...(ch.repeats || {}) };
+    if (n > 0) ch.repeats[sizeKey] = n; else delete ch.repeats[sizeKey];
+    try { await savePattern(pattern); } catch (err) { console.error(err); }
+    paint();
+  });
+
   root.addEventListener('click', async (e) => {
     if (e.target.closest('[data-cast-step]') && e.detail === 0) castStep(+e.target.closest('[data-cast-step]').dataset.castStep);
     if (e.target.closest('[data-mstep]') && e.detail === 0) measureStep(+e.target.closest('[data-mstep]').dataset.mstep);
