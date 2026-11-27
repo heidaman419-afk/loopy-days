@@ -26,7 +26,9 @@ const PICK_UP = /\bpick up(?: and knit)?\s+(\d+)\s*(?:sts?|stitches)\b/i;
 const FINISH = /^(?:weave in|block\b|blocking|finishing|sew\b|graft\b)/i;
 const CHECK = /there (?:are|is) (?:now )?(?:a total of )?(\d+)\s*(sts?|stitches)([^.]*)\./i;
 const METHOD = /(long[- ]tail|cable|backwards?[- ]loop|provisional|german twisted|knitted|tubular|crochet)\s*(?:cast[- ]on|method)?/i;
-const SAME_WAY = /\bwork (?:the other|a second|the second) (\w+) the same way\b|\bmake (?:a |the )?(?:second|other) (\w+) the same way\b|^(?:knit|make|work) (?:one more|another|a second) (?!(?:rnds?|rounds?|rows?|sts?|stitch\w*|times?|rep\w*|pattern)\b)(\w+)\.?$/i;
+const SAME_WAY = /\bwork (?:the other|a second|the second) (\w+) the same way\b|\bmake (?:a |the )?(?:second|other) (\w+) the same way\b/i;
+// "Make another sock." / "Knit one more mitten.": only when the word names the piece or pattern.
+const ONE_MORE = /^(?:knit|make|work) (?:one more|another|a second) (\w+)\.?$/i;
 const NOTE = /^(?:note|tip|important|hint)\b[^.!:]{0,40}[!:]|^note about\b|^distribution of\b|\bare now complete\b/i;
 const MEASURE = /\buntil\b[^.]*?\bmeasure(?:s|d)\b/i;
 const TARGET = /until (?:the )?\w+(?: measured(?: [^,.]*?)? is| measures)\s+((?:approx\.?\s*)?[\d.,½¼¾]+\s*(?:cm|mm|in(?:ches)?|["“”″])?(?:\s*\/\s*[\d.,½¼¾]+\s*(?:cm|mm|in(?:ches)?|["“”″]))?)/i;
@@ -70,7 +72,9 @@ function proseSteps(paras) {
   for (const p of paras) {
     const cur = steps[steps.length - 1];
     const prev = cur && cur[cur.length - 1];
-    if (cur && (/:\s*$/.test(prev) || GOES_ON.test(p) || !ACTION.test(p))) cur.push(p);
+    // A lead-in to a chart ("… according to the chart:") ends its step: the chart comes next.
+    const toChart = prev && /\b(?:charts?|diagrams?)\s*:\s*$/i.test(prev);
+    if (cur && !toChart && (/:\s*$/.test(prev) || GOES_ON.test(p) || !ACTION.test(p))) cur.push(p);
     else steps.push([p]);
   }
   return steps;
@@ -390,6 +394,14 @@ export function buildGuide(groups, { name = 'Pattern', sizeIndex = 0, sizeCount 
         continue;
       }
 
+      if ((m = ONE_MORE.exec(t))) {
+        const stem = m[1].toLowerCase().replace(/e?s$/, '');
+        if (stem.length >= 3 && `${piece.name} ${name}`.toLowerCase().split(/[^a-zà-ÿ]+/).some((w) => w.replace(/e?s$/, '') === stem)) {
+          closeGroup();
+          piece.times = Math.max(2, piece.times || 1);
+          continue;
+        }
+      }
       if ((m = SAME_WAY.exec(t))) {
         closeGroup();
         piece.times = Math.max(2, piece.times || 1);

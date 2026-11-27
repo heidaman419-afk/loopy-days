@@ -182,6 +182,8 @@ export function parseMeta(lines) {
         const idx = lines.indexOf(l);
         const below = [];
         for (let k = idx + 1; k < lines.length && lines[k].page === l.page && !lines[k].big && !lines[k].bold; k++) {
+          // Up to a blank line or an instruction: the knitting under it is not the value.
+          if (below.length && (INSTRUCTION.test(lines[k].text) || lines[k].gapAbove > lines[k].fs * 2.15)) break;
           below.push(lines[k]);
           if (key[0] === 'sizes') break;                         // a size list is one line
         }
