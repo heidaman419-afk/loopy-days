@@ -82,7 +82,7 @@ export async function quickScan(page, pdfjs) {
 
 /**
  * Read the chart on a page. Returns null when no grid is found, else:
- * { page, pageCanvas, pageScale, gridPage (lattice in page-canvas px), cellCanvas, grid (lattice in
+ * { page, pageCanvas, pageScale, detail ('page' | 'area ×S' | 'page (close-up did not match)'), gridPage (lattice in page-canvas px), cellCanvas, grid (lattice in
  *   cell-canvas px), res (readCells), legend: Map(key → { page, span, text, img, swatch, label }),
  *   unused: [legend lines on this page not used], name }
  */
@@ -94,7 +94,7 @@ export async function readChart(doc, pnum, pdfjs) {
   const g0 = largest(p0.img, [...shapes.images, { x0: 0, x1: p0.img.width, y0: 0, y1: p0.img.height }]);
   if (!g0) { freeCanvas(p0.canvas); return null; }
   // Small cells: read the chart's area again at a higher scale (area only, within the pixel cap).
-  let cellCanvas = p0.canvas, img = p0.img, g = g0, k = 1, ox = 0, oy = 0;
+  let cellCanvas = p0.canvas, img = p0.img, g = g0, k = 1, ox = 0, oy = 0, detail = 'page';
   if (Math.min(...g0.pitch) < 40) {
     const m = Math.max(...g0.pitch);
     const area = { x: Math.max(0, g0.xs[0] - m) / S0, y: Math.max(0, g0.ys[0] - m) / S0 };
@@ -104,8 +104,8 @@ export async function readChart(doc, pnum, pdfjs) {
     if (S1 > S0) {
       const r = await renderPage(page, S1, area);
       const g1 = findGrid(r.img, { x0: 0, x1: r.img.width, y0: 0, y1: r.img.height });
-      if (g1 && g1.cols === g0.cols && g1.rows === g0.rows) { cellCanvas = r.canvas; img = r.img; g = g1; k = S1 / S0; ox = area.x * S0; oy = area.y * S0; }
-      else freeCanvas(r.canvas);
+      if (g1 && g1.cols === g0.cols && g1.rows === g0.rows) { cellCanvas = r.canvas; img = r.img; g = g1; k = S1 / S0; ox = area.x * S0; oy = area.y * S0; detail = `area ×${S1}`; }
+      else { freeCanvas(r.canvas); detail = 'page (close-up did not match)'; }
     }
   }
   const res = readCells(img, g);
@@ -129,7 +129,7 @@ export async function readChart(doc, pnum, pdfjs) {
     freeCanvas(o.canvas);
     op.cleanup();
   }
-  return { page: pnum, pageCanvas: p0.canvas, pageScale: S0, gridPage, cellCanvas, grid: g, res, legend, unused, name: chartName(tb0, gridPage, pnum) };
+  return { page: pnum, pageCanvas: p0.canvas, pageScale: S0, gridPage, cellCanvas, grid: g, res, legend, unused, name: chartName(tb0, gridPage, pnum), detail };
 }
 
 /** A crop of one legend line (swatch + label) from a rendered page, as a data URL. */

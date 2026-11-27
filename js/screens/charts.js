@@ -63,11 +63,20 @@ export async function mount(root, params) {
             <span>Page ${pg}${found.get(pg) ? ` · ${esc(found.get(pg))}` : ''} · ${st}</span>${icons.chevronRight}</a>`;
         }).join('')}</div>
         <p class="settings__p ch-status" data-status role="status"></p>
+        ${pattern.pdf_file_id ? `<form class="ch-other" data-other><label class="field"><span class="field__label">A chart on another page?</span>
+          <span class="ch-row"><input class="input input--small" name="page" inputmode="numeric" pattern="[0-9]*" placeholder="Page number" aria-label="Page number" style="width:140px">
+          <button type="submit" class="btn btn--small btn--secondary">Read that page</button></span></label></form>` : ''}
       </main>
       <footer class="setup-actions">
         ${pattern.pdf_file_id ? `<button type="button" class="btn ${pages.length ? 'btn--secondary' : 'btn--butter'} btn--block" data-scan>${icons.grid}<span>${pattern.chart_pages ? 'Look for charts again' : 'Look for charts'}</span></button>` : '<p class="settings__p">Attach the pattern’s PDF first (Edit on the pattern page).</p>'}
         <a class="btn btn--text btn--block" href="${back}">Back to the pattern</a>
       </footer>`;
+    root.querySelector('[data-other]')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const n = parseInt(new FormData(e.currentTarget).get('page'), 10);
+      if (n > 0 && (!pattern.pdf_pages || n <= pattern.pdf_pages)) location.hash = `#/charts/${pattern.id}/${n}`;
+      else toast(pattern.pdf_pages ? `Pick a page from 1 to ${pattern.pdf_pages}` : 'Type a page number');
+    });
     root.querySelector('[data-scan]')?.addEventListener('click', async (e) => {
       const btn = e.currentTarget; btn.disabled = true;
       const status = root.querySelector('[data-status]');
@@ -157,11 +166,14 @@ export async function mount(root, params) {
       Object.assign(C, { name: saved.name, status: saved.status, rot: saved.rot || 0, worked: saved.worked || 'round', first_side: saved.first_side || 'RS', times: saved.times || 1, place: saved.place || null });
       C.grid.cells = saved.grid.cells.map((row) => row.slice());
       C.flagged = new Set(saved.flagged || []);
-      for (const sk of saved.keys || []) {
-        const k = C.keys.find((x) => x.id === sk.id);
-        if (k) Object.assign(k, { name: sk.name, nameFrom: sk.nameFrom || 'typed', stitch: sk.stitch, colour: sk.colour, none: !!sk.none });
-      }
-      C.keys = C.keys.filter((k) => (saved.keys || []).some((sk) => sk.id === k.id) || !saved.keys);
+      // The saved keys as they were (swatch, look, choices), so a changed reader can't move a name onto
+      // another swatch; only the legend picture comes from this read when that key's id still matches.
+      if (saved.keys) C.keys = saved.keys.map((sk) => {
+        const fresh = C.keys.find((x) => x.id === sk.id);
+        const legend = sk.legend ? { ...sk.legend, img: fresh && fresh.legend && fresh.legend.page === sk.legend.page ? fresh.legend.img : '' } : null;
+        return { ...sk, nameFrom: sk.nameFrom || 'typed', none: !!sk.none, legend: legend && legend.img ? legend : (legend ? { ...legend, img: '' } : null) };
+      });
+      C.original = C.grid.cells.map((row) => row.slice());
     } else {
       const p = suggestPlace(tree, C);
       C.place = p;
@@ -389,7 +401,7 @@ export async function mount(root, params) {
         const sym = k.stitch ? symbolById(k.stitch) : null;
         const sugg = suggestions(k).filter((x) => x.id !== k.stitch);
         return `<div class="ch-key" data-k="${k.id}"><span class="ch-swatch" style="background-image:url(${k.img})"></span><div>
-          ${k.legend ? `<img class="ch-legend" src="${k.legend.img}" alt="Legend line${k.legend.text ? `: ${esc(k.legend.text)}` : ''}">${k.legend.page !== C.page ? `<span class="settings__p">Legend on page ${k.legend.page}</span>` : ''}` : '<p class="settings__p">No legend line matched.</p>'}
+          ${k.legend ? `${k.legend.img ? `<img class="ch-legend" src="${k.legend.img}" alt="Legend line${k.legend.text ? `: ${esc(k.legend.text)}` : ''}">` : `<span class="settings__p">Legend: ${esc(k.legend.text || 'matched')}</span>`}${k.legend.page !== C.page ? `<span class="settings__p">Legend on page ${k.legend.page}</span>` : ''}` : '<p class="settings__p">No legend line matched.</p>'}
           <div class="ch-row">
             <button type="button" class="btn btn--small btn--secondary ch-stitch" data-lib-open aria-label="Pick the stitch for key ${i + 1}">${sym ? `${symbolSVG(sym, 20)} ${esc(sym.name)}` : 'Pick stitch…'}</button>
             ${sugg.map((x) => `<button type="button" class="chip ch-sugg" data-sugg="${x.id}">${symbolSVG(x, 16)} ${esc(x.name)}</button>`).join('')}
@@ -426,7 +438,7 @@ export async function mount(root, params) {
       const dlg = $('[data-lib]');
       dlg.dataset.key = String(k.id);
       $('[data-lib-title]').textContent = `Pick the stitch for key ${C.keys.indexOf(k) + 1}`;
-      $('[data-lib-key]').innerHTML = `<span class="ch-swatch" style="background-image:url(${k.img})"></span>${k.legend ? `<img class="ch-legend" src="${k.legend.img}" alt="">` : ''}`;
+      $('[data-lib-key]').innerHTML = `<span class="ch-swatch" style="background-image:url(${k.img})"></span>${k.legend && k.legend.img ? `<img class="ch-legend" src="${k.legend.img}" alt="">` : ''}`;
       $('[data-lib-search]').value = '';
       renderLibrary('');
       dlg.hidden = false;
@@ -503,7 +515,7 @@ export async function mount(root, params) {
         pattern = await getPattern(pattern.id);
         pattern.charts = [...(pattern.charts || []).filter((c) => c.page !== C.page), rec].sort((a, b) => a.page - b.page);
         await savePattern(pattern);
-        await applyCharts(pattern);
+        await applyCharts(pattern, rec.id);
         const hasGuide = (await guidesOf(pattern.id)).some((g) => !g.deleted);
         toast(hasGuide ? `“${rec.name}” is in the guide` : `“${rec.name}” saved. It will be in the guide when you build one.`, { ms: 3500 });
         location.hash = `#/charts/${pattern.id}`;

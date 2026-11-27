@@ -248,15 +248,16 @@ export async function autoGuides(pattern, onlySizeId) {
 }
 
 /**
- * After charts are confirmed or changed: put them into every existing guide of the pattern (hand
- * edits elsewhere are kept; chart steps are replaced). Projects keep their place, as on Rebuild.
+ * After a chart is confirmed or changed (`chartId`): update every existing guide of the pattern.
+ * Chart steps already in a guide stay where the knitter has them (rows updated); only the saved
+ * chart is placed if it isn't there yet. Hand edits elsewhere are kept. Projects keep their place.
  */
-export async function applyCharts(pattern) {
+export async function applyCharts(pattern, chartId = null) {
   const { carryProgress } = await import('../patterns/guide-math.js');
   const allProgress = await db.getAll('guide_progress');
   for (const g of await guidesOf(pattern.id)) {
     if (g.deleted || !g.tree) continue;
-    const tree = attachCharts(g.tree, pattern.charts, g.size_id);
+    const tree = attachCharts(g.tree, pattern.charts, g.size_id, { keepPlaced: true, place: chartId });
     await saveGuide(pattern, g.size_id, tree, g.status);
     for (const p of allProgress.filter((x) => x.guide_id === g.id && !x.deleted)) {
       const r = carryProgress(g.tree, tree, p);
