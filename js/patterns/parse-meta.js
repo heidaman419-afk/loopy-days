@@ -15,7 +15,7 @@ const LABELS = [
 ];
 
 export const INSTRUCTION = /^(?:(?:[A-Z][\w-]*\s+){0,3}(?:Row|Rows|Rnd|Rnds|Round|Rounds)\s+\d|Cast on|CO\s+\d|(?:Now )?work (?:rows?|rnds?|rounds?)\b|Bind off|BO\b|Pick up)/i;
-const GLOSSARY_HEAD = /^(?:abbreviations?|glossary|terms|stitch guide|key)$/i;
+const GLOSSARY_HEAD = /^(?:abbreviations?|glossary|terms|stitch guide|key|explanations?|legend|symbols|chart key|key to (?:the )?(?:charts?|symbols))$/i;
 const BACK_MATTER = /©|copyright|all rights reserved|personal,? non-commercial|may not be (?:copied|resold|sold)/i;
 const PROMO = /#\w|@\w|www\.|https?:|\.com\b|youtube|instagram|facebook|pinterest|ravelry|newsletter|hope you enjoy|tag me|share your/i;
 const KNITTING = /\b(?:cast on|bind off|knit\w*|purl\w*|k\d+|p\d+|k2tog|ssk|rnds?|rows?|sts?|stitch\w*|needles?|markers?|repeat\w*|rib\w*|decrease\w*|increase\w*|measure\w*)\b/i;
@@ -123,7 +123,7 @@ function designerFrom(lines) {
     if (m && m[1].trim().length > 2 && m[1].trim().length < 60 && !/^©/.test(l.text)) return m[1].trim();
     m = /^©\s*(?:copyright\s*)?(?:\d{4}\s*)?(.{3,80})$/i.exec(l.text.trim());
     if (m) {
-      let name = m[1].replace(/\s+(?:from|by|at|via)\s+@.*$/i, '').replace(/\s+@\S+.*$/, '').replace(/\s+\d{1,4}$/, '').trim();
+      let name = m[1].replace(/\s+(?:from|by|at|via)\s+@.*$/i, '').replace(/\s+@\S+.*$/, '').replace(/\s+\d{4}\b[.,]?\s+(?:all rights|for personal)\b.*$/i, '').replace(/\s+\d{1,4}$/, '').trim();
       // Drop a trailing brand word that also appears elsewhere ("… Kutovakika" with "KUTOVA KIKA" on page 1).
       const words = name.split(/\s+/);
       if (words.length > 2) {
@@ -166,11 +166,32 @@ export function parseMeta(lines) {
       lab = l.parts[0].text.replace(/:\s*$/, '').trim();
       value = l.parts.slice(1).map((p) => p.text).join(' ').trim();
     } else {
-      // "Sizes: S (M) L" or "a. Bust circumference: 114 (…) cm" on one line; "Suggested yarn:" alone
-      const m = /^(?:[a-z]\.\s+)?([A-Za-z][A-Za-z /]{1,40}):\s*(.*)$/.exec(l.text);
-      if (!m || !LABELS.some(([, re]) => re.test(m[1].trim()))) continue;
+      // "Sizes: S (M) L" or "a. Bust circumference: 114 (…) cm" on one line; "Suggested yarn:" alone;
+      // "Size (EU)" alone as a heading.
+      const m = /^(?:[a-z]\.\s+)?([A-Za-z][A-Za-z /]{1,40}):\s*(.*)$/.exec(l.text)
+        || ((l.big || l.bold) && /^(?:sizes?|sizing)\s*\([^)]{1,20}\)$/i.exec(l.text) ? [l.text, l.text, ''] : null);
+      if (!m || !LABELS.some(([, re]) => re.test(m[1].trim().replace(/\s*\([^)]*\)\s*$/, '')))) continue;
       lab = m[1].trim();
       value = m[2].trim();
+    }
+    // A label set as a heading on its own line ("Needles:", "Size (EU)"): its value is the
+    // body text right under it, up to the next heading-like line.
+    if (!value && l.parts.length === 1 && (l.big || l.bold)) {
+      const key = LABELS.find(([k, re]) => k !== 'materials' && k !== 'measure' && re.test(lab.replace(/\s*\([^)]*\)\s*$/, '')));
+      if (key && !labels[key[0]]) {
+        const idx = lines.indexOf(l);
+        const below = [];
+        for (let k = idx + 1; k < lines.length && lines[k].page === l.page && !lines[k].big && !lines[k].bold; k++) {
+          below.push(lines[k]);
+          if (key[0] === 'sizes') break;                         // a size list is one line
+        }
+        if (below.length) {
+          labels[key[0]] = { value: below.map((x) => x.text).join(' '), line: l };
+          used.add(l);
+          below.forEach((x) => used.add(x));
+          continue;
+        }
+      }
     }
     for (const [key, re] of LABELS) {
       if (re.test(lab)) {
@@ -227,7 +248,9 @@ export function parseMeta(lines) {
 
   // ---- split the rest into groups under headings ----
   const isPageTitle = (l) => !l.bold && l.big && l.text === l.text.toUpperCase() && l.text.length <= 30;
-  const isHeading = (l) => l.bold && l.parts.length === 1 && l.text.length <= 70 && !/[.:;]$/.test(l.text) && !INSTRUCTION.test(l.text) && !PROMO.test(l.text);
+  // A heading may end in ':' when it is set bigger than the body text ("Toe:").
+  const colonHead = (l) => l.big && l.text.length <= 40 && /^[^.:;]+:$/.test(l.text);
+  const isHeading = (l) => l.bold && l.parts.length === 1 && l.text.length <= 70 && (!/[.:;]$/.test(l.text) || colonHead(l)) && !INSTRUCTION.test(l.text) && !PROMO.test(l.text);
   const isPiece = (l) => (l.text === l.text.toUpperCase() && /[A-Z]{3}/.test(l.text)) || l.big;
   const groups = [];
   let g = { heading: null, level: 'section', lines: [], page: null };
@@ -235,10 +258,14 @@ export function parseMeta(lines) {
   for (const l of lines) {
     if (l === biggest || labelLines.has(l) || used.has(l)) continue;
     if (isPageTitle(l)) continue;
+    if (/^[↑↓←→⬆⬇]\s*\S{0,15}$/.test(l.text)) continue;                                  // a chart's "↑Start" mark
     if (l.bold && l.parts.length === 1 && PROMO.test(l.text) && !KNITTING.test(l.text)) continue;   // "Watch the video at …"
     if (isHeading(l)) {
       if (g.heading || g.lines.length) groups.push(g);
-      g = { heading: isPiece(l) ? title(l.text.trim()) : l.text.trim(), level: isPiece(l) ? 'piece' : 'section', lines: [], page: l.page };
+      // A run-in "Name:" heading names a part of the current piece, not a new piece.
+      const piece = isPiece(l) && !colonHead(l);
+      const head = l.text.trim().replace(/\s*:$/, '');
+      g = { heading: piece ? title(head) : head, level: piece ? 'piece' : 'section', lines: [], page: l.page };
       continue;
     }
     g.lines.push(l);
@@ -256,14 +283,28 @@ export function parseMeta(lines) {
     && lines.filter((l) => l.page === p).every((l) => !KNITTING.test(l.text) || PROMO.test(l.text) || BACK_MATTER.test(l.text));
   groups.forEach((grp, i) => {
     if (grp.heading && GLOSSARY_HEAD.test(grp.heading)) {
-      const eq = grp.lines.filter((l) => /\s?=\s?/.test(l.text)).length >= Math.max(1, grp.lines.length * 0.4);
+      // Chart keys: a symbol drawn in text ("/ /", "\\") sits on its own line above its meaning.
+      const isSymbol = (l) => !/[A-Za-z0-9]/.test(l.text) && l.text.length <= 16;
+      const words = grp.lines.filter((l) => !isSymbol(l));
+      const eq = words.filter((l) => /\s?=\s?/.test(l.text)).length >= Math.max(1, words.length * 0.4);
+      let symbol = null;
+      let prevText = null;
       for (const l of grp.lines) {
         if (BACK_MATTER.test(l.text)) break;
+        if (isSymbol(l)) { symbol = l.text.replace(/\s+/g, ' ').trim(); continue; }
         let abbr; let meaning;
         if (eq) {
           const m = /^(.{1,16}?)\s*=\s*(.+)$/.exec(l.text);
           if (m) { abbr = m[1]; meaning = m[2]; }
-          else if (r.glossary.length) { r.glossary[r.glossary.length - 1].meaning += ` ${l.text}`; continue; }
+          else if (symbol) { abbr = symbol; meaning = l.text; }
+          else if (r.glossary.length) {
+            // A wrapped meaning starts at the same left edge; an indented stray label (a colour
+            // swatch's name in a chart key) is not part of it.
+            if (!prevText || Math.abs(l.x - prevText.x) <= 3) r.glossary[r.glossary.length - 1].meaning += ` ${l.text}`;
+            continue;
+          }
+          symbol = null;
+          prevText = l;
         } else {
           abbr = l.parts.length > 1 ? l.parts[0].text : (/^(\S{1,10}?):?\s+(.+)$/.exec(l.text) || [])[1];
           meaning = l.parts.length > 1 ? l.parts.slice(1).map((p) => p.text).join(' ') : (/^(\S{1,10}?):?\s+(.+)$/.exec(l.text) || [])[2];

@@ -173,7 +173,8 @@ function isContinuation(prev, l) {
   // A bold label ending in ':' ("Rnd 1:", "Gauge:") owns the plain lines right under it.
   // Row labels on their own line ("Rnd 1:", "Short Row 3 (RS):") may sit a little further up.
   const labelNear = ROW_LABEL.test(prev.text) ? gap < Math.max(l.fs, prev.fs) * 2.15 : normal;
-  if (prev.bold && /:\s*$/.test(prev.text) && !l.bold && labelNear && sameX && single && !LIST_ITEM.test(l.text)) return true;
+  // (Not a heading-size label over body text: "Toe:" in a bigger font is a heading of its own.)
+  if (prev.bold && /:\s*$/.test(prev.text) && !l.bold && labelNear && sameX && single && !LIST_ITEM.test(l.text) && !(prev.fs > l.fs * 1.12)) return true;
   // Plain lines at ordinary spacing belong to the same paragraph.
   if (!prev.bold && !l.bold && normal && sameX && single && plainOk && !LIST_ITEM.test(l.text)) return true;
   // Indented under the previous line's value column (label/value tables, "Row n:" entries).
