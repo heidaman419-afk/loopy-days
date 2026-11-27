@@ -14,6 +14,7 @@
 import * as db from '../db.js';
 import { buildGuide, GUIDE_READER_VERSION } from '../patterns/parse-guide.js';
 import { totalRows, clamp } from '../patterns/guide-math.js';
+import { attachCharts } from '../patterns/chart-guide.js';
 
 export const CATEGORIES = [
   // [key, label, group]
@@ -149,8 +150,11 @@ export async function getGuide(id) {
   return g && !g.deleted ? g : null;
 }
 
-/** Build a guide for one size from the PDF text kept with the pattern. */
+/** Build a guide for one size from the PDF text kept with the pattern, with its confirmed charts as steps. */
 export function guideFromPdf(pattern, sizeId) {
+  return attachCharts(textGuide(pattern, sizeId), pattern.charts, sizeId);
+}
+function textGuide(pattern, sizeId) {
   const sizes = pattern.sizes || [];
   const size = sizes.find((s) => s.id === sizeId);
   const fromPdf = sizes.filter((s) => s.pos != null).sort((a, b) => a.pos - b.pos);
@@ -241,6 +245,26 @@ export async function autoGuides(pattern, onlySizeId) {
     made++;
   }
   return made;
+}
+
+/**
+ * After charts are confirmed or changed: put them into every existing guide of the pattern (hand
+ * edits elsewhere are kept; chart steps are replaced). Projects keep their place, as on Rebuild.
+ */
+export async function applyCharts(pattern) {
+  const { carryProgress } = await import('../patterns/guide-math.js');
+  const allProgress = await db.getAll('guide_progress');
+  for (const g of await guidesOf(pattern.id)) {
+    if (g.deleted || !g.tree) continue;
+    const tree = attachCharts(g.tree, pattern.charts, g.size_id);
+    await saveGuide(pattern, g.size_id, tree, g.status);
+    for (const p of allProgress.filter((x) => x.guide_id === g.id && !x.deleted)) {
+      const r = carryProgress(g.tree, tree, p);
+      p.cursor = r.cursor; p.measure = r.measure; p.tally = r.tally;
+      if (Object.keys(r.unattached.measure).length || Object.keys(r.unattached.tally).length) p.unattached = r.unattached;
+      await db.put('guide_progress', p);
+    }
+  }
 }
 
 /* ---------- progress ---------- */
